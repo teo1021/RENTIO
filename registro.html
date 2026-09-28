@@ -1,0 +1,80 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RENTIO - Registro de Usuario</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #0f172a; }
+        .card { border-radius: 12px; }
+    </style>
+</head>
+<body class="d-flex align-items-center justify-content-center vh-100">
+    <div class="card p-4 shadow-lg text-white bg-dark" style="width: 400px;">
+        <h3 class="text-center text-success fw-bold">RENTIO</h3>
+        <p class="text-center text-muted small">Crear Cuenta de Usuario</p>
+        
+        <form id="formRegistro">
+            <div class="mb-3">
+                <label class="form-label">Nombre Completo:</label>
+                <input type="text" id="regNombre" class="form-control" required placeholder="Ej. Mateo Bedoya">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Correo Electrónico:</label>
+                <input type="email" id="regCorreo" class="form-control" required placeholder="correo@ejemplo.com">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Contraseña:</label>
+                <input type="password" id="regContrasena" class="form-control" required placeholder="******">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Rol en la Plataforma:</label>
+                <select id="regRol" class="form-select">
+                    <option value="arrendador">Arrendador (Propietario)</option>
+                    <option value="inquilino">Inquilino (Arrendatario)</option>
+                </select>
+            </div>
+            <button type="submit" class="btn btn-success w-100 fw-bold mb-3">REGISTRARME</button>
+        </form>
+
+        <hr class="border-secondary">
+        
+        <div class="text-center">
+            <p class="small text-muted mb-1">¿Ya tienes una cuenta registrada?</p>
+            <a href="login.html" class="btn btn-outline-primary btn-sm w-100">Ir a Iniciar Sesión</a>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000/api";
+
+        document.getElementById("formRegistro").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const payload = {
+                nombre: document.getElementById("regNombre").value,
+                correo: document.getElementById("regCorreo").value,
+                contrasena: document.getElementById("regContrasena").value,
+                rol: document.getElementById("regRol").value
+            };
+
+            try {
+                const res = await fetch(`${API_URL}/registro`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert("¡Usuario registrado con éxito! Redirigiendo al inicio de sesión...");
+                    window.location.href = "login.html";
+                } else {
+                    alert(data.detail || "Error al registrar usuario");
+                }
+            } catch (err) {
+                alert("Error de conexión: " + err.message);
+            }
+        });
+    </script>
+</body>
+</html>
