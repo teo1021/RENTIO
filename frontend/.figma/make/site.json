@@ -1,0 +1,10 @@
+{
+  "description": "Gestión integral de arrendamientos para pequeños arrendadores con evaluación inteligente de riesgo, control de contratos, pagos y notificaciones en un diseño claro y profesional.",
+  "robots": {
+    "index": false
+  },
+  "accessibility": {
+    "addBypassLinks": false,
+    "ignoreReducedMotion": false
+  }
+}

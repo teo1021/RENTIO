@@ -1,0 +1,397 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RENTIO - Portal Inquilino</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f1f5f9; }
+        .card { border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); transition: transform 0.2s; }
+        .card:hover { transform: translateY(-3px); }
+        .carousel-img-large { height: 450px; object-fit: cover; border-radius: 8px; }
+        .carousel-img-thumb { height: 200px; object-fit: cover; }
+    </style>
+</head>
+<body>
+
+    <!-- NAV BAR -->
+    <nav class="navbar navbar-dark bg-primary px-4 d-flex justify-content-between align-items-center">
+        <a class="navbar-brand fw-bold text-white" href="#">RENTIO <span class="fs-6 fw-normal">| Portal Inquilino</span></a>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-light text-dark me-3 px-3 py-2 fs-6" id="badgeUsuario">🏠 Cargando...</span>
+            <button class="btn btn-outline-light btn-sm" onclick="cerrarSesion()">Cerrar Sesión</button>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <!-- PESTAÑAS -->
+        <ul class="nav nav-pills mb-4" id="inquilinoTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active fw-bold" id="disponibles-tab" data-bs-toggle="pill" data-bs-target="#disponibles" type="button" onclick="cargarInmueblesDisponibles()">Catálogo de Inmuebles</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-bold" id="contratos-tab" data-bs-toggle="pill" data-bs-target="#contratos" type="button">Mi Contrato Cifrado (AES-256)</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-bold" id="pasarela-tab" data-bs-toggle="pill" data-bs-target="#pasarela" type="button">Pasarela de Pago y Firma SHA-256</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="inquilinoTabsContent">
+            
+            <!-- TAB 1: INMUEBLES DISPONIBLES -->
+            <div class="tab-pane fade show active" id="disponibles">
+                <div class="card p-4">
+                    <h5 class="mb-3">Propiedades Disponibles en Arriendo</h5>
+                    <div id="contenedorInmuebles" class="row g-4"></div>
+                </div>
+            </div>
+
+            <!-- TAB 2: VISTA DE CONTRATO LEGAL CON CIFRADO -->
+            <div class="tab-pane fade" id="contratos">
+                <div class="card p-4 mx-auto" style="max-width: 700px;">
+                    <h5 class="mb-3 text-center">Generador / Visor de Contrato Legal (Ley 820 de 2003)</h5>
+                    <p class="text-muted small text-center">Protegido bajo cifrado AES-256 en cumplimiento de la Ley 1581 de 2012.</p>
+                    <button class="btn btn-outline-primary btn-sm mb-3" onclick="generarEjemploContrato()">Generar borrador de contrato para prueba</button>
+                    
+                    <div id="visorContrato" class="d-none">
+                        <h6><strong>Documento Cifrado en PostgreSQL (AES-256):</strong></h6>
+                        <textarea id="textoCifradoAES" class="form-control font-monospace mb-3 text-muted" rows="3" readonly></textarea>
+                        <h6><strong>Minuta Legal del Contrato (Desencriptada para la vista del Inquilino):</strong></h6>
+                        <pre id="minutaDescreptada" class="bg-light p-3 border rounded small"></pre>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: PASARELA DE PAGOS Y SELLO SHA-256 -->
+            <div class="tab-pane fade" id="pasarela">
+                <div class="card p-4 mx-auto" style="max-width: 550px;">
+                    <h5 class="text-center mb-2">Pasarela Digital de Pagos</h5>
+                    <p class="small text-muted text-center mb-4">Liquide su canon mensual de forma segura con soporte Bancolombia / Nequi / Wompi.</p>
+                    
+                    <form id="formPasarela">
+                        <div class="mb-3">
+                            <label class="form-label">ID del Contrato:</label>
+                            <input type="number" id="idContrato" class="form-control" value="1" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Monto a Pagar ($ COP):</label>
+                            <input type="number" id="montoPago" class="form-control" value="988555" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label">Medio de Pago:</label>
+                            <select id="medioPago" class="form-select">
+                                <option value="Bancolombia Botón PSE">Bancolombia Botón PSE</option>
+                                <option value="Nequi Directo">Nequi Directo</option>
+                                <option value="Tarjeta de Crédito (Wompi)">Tarjeta de Crédito / Débito (Wompi)</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100 fw-bold">PROCESAR PAGO Y GENERAR SELLO INALTERABLE</button>
+                    </form>
+
+                    <div id="resPago" class="mt-4 d-none p-3 alert alert-success text-break">
+                        <h6 class="fw-bold"> Transacción Aprobada Exitosamente</h6>
+                        <p class="small mb-1"><strong>Medio:</strong> <span id="resMedio"></span></p>
+                        <p class="small mb-1"><strong>Sello Digital SHA-256 (Ley 527 de 1999):</strong></p>
+                        <code id="hashSHA256" class="d-block bg-white p-2 border rounded small text-dark mb-2"></code>
+                        <span class="badge bg-primary">Sello Inalterable Guardado en PostgreSQL</span>
+                    </div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODAL DE DETALLE COMPLETO DEL APARTAMENTO -->
+    <div class="modal fade" id="modalDetalleInmueble" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-primary text-white">
+                    <h5 class="modal-title fw-bold" id="modalTitulo">Detalle de la Propiedad</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-4">
+                        <div class="col-lg-7">
+                            <div id="carouselDetalle" class="carousel slide shadow rounded overflow-hidden" data-bs-ride="carousel">
+                                <div class="carousel-inner" id="carouselDetalleInner"></div>
+                                <button class="carousel-control-prev" type="button" data-bs-target="#carouselDetalle" data-bs-slide="prev">
+                                    <span class="carousel-control-prev-icon bg-dark rounded-circle p-3"></span>
+                                </button>
+                                <button class="carousel-control-next" type="button" data-bs-target="#carouselDetalle" data-bs-slide="next">
+                                    <span class="carousel-control-next-icon bg-dark rounded-circle p-3"></span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-5 d-flex flex-column justify-content-between">
+                            <div>
+                                <span class="badge bg-success mb-2 px-3 py-2">Disponible para Arriendo</span>
+                                <h3 class="fw-bold text-dark" id="modalDireccion">---</h3>
+                                <h5 class="text-secondary mb-3">Barrio / Sector: <span id="modalBarrio" class="fw-bold text-dark">---</span></h5>
+                                <hr>
+                                <div class="my-3">
+                                    <p class="text-muted mb-0 fs-6">Canon de Arrendamiento Mensual:</p>
+                                    <h2 class="fw-bold text-primary" id="modalCanon">$0 COP</h2>
+                                </div>
+                                <hr>
+                                <div class="bg-light p-3 rounded border my-3">
+                                    <h6 class="fw-bold text-dark">Información del Propietario:</h6>
+                                    <p class="mb-1">👤 <strong>Propietario:</strong> <span id="modalPropietario">---</span></p>
+                                    <p class="mb-0">✉️ <strong>Contacto:</strong> <span id="modalCorreo">---</span></p>
+                                </div>
+                            </div>
+
+                            <div>
+                                <button class="btn btn-primary btn-lg w-100 fw-bold shadow-sm" id="btnPostularModal">
+                                    📋 POSTULARME Y COMPLETAR PERFIL PARA IA
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL DE FORMULARIO DE POSTULACIÓN CON DATOS FINANCIEROS PARA IA -->
+    <div class="modal fade" id="modalFormPostulacion" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold">📝 Formulario de Postulación Financiera</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <p class="small text-muted mb-3">Estos datos serán analizados automáticamente por el Motor Neuro-Difuso del Arrendador para evaluar tu solicitud.</p>
+                    <form id="formDatosPostulacion">
+                        <input type="hidden" id="postInmuebleId">
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Edad del Postulante:</label>
+                            <input type="number" id="postEdad" class="form-control" value="28" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Ingresos Mensuales Certificados ($ COP):</label>
+                            <input type="number" id="postIngresos" class="form-control" value="3200000" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Score Crediticio (Datacrédito / Cifin 0 - 850):</label>
+                            <input type="number" id="postCreditScore" class="form-control" value="710" required>
+                        </div>
+                        <div class="mb-2">
+                            <label class="form-label small fw-bold">Días de Retraso Habitual en Arriendos/Facturas:</label>
+                            <input type="number" id="postDiasRetraso" class="form-control" value="0" required>
+                        </div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Situación Laboral Actual:</label>
+                            <select id="postEmpleado" class="form-select">
+                                <option value="true">Empleado Formal / Contratista</option>
+                                <option value="false">Independiente / Desempleado</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-success w-100 fw-bold">🚀 ENVIAR SOLICITUD AL ARRENDADOR</button>
+                    </form>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = "http://127.0.0.1:8000/api";
+        const token = localStorage.getItem("access_token");
+        const nombreUsuario = localStorage.getItem("nombre_usuario");
+        const rol = localStorage.getItem("rol");
+        let listaInmueblesGlobal = [];
+
+        if (!token || rol !== "inquilino") {
+            alert("Acceso restringido. Inicie sesión como Inquilino.");
+            cerrarSesion();
+        } else {
+            document.getElementById("badgeUsuario").innerText = "🏠 " + nombreUsuario + " (Inquilino)";
+            cargarInmueblesDisponibles();
+        }
+
+        function cerrarSesion() {
+            localStorage.clear();
+            window.location.href = "login.html";
+        }
+
+        async function cargarInmueblesDisponibles() {
+            try {
+                const res = await fetch(`${API_URL}/inmuebles/todos`);
+                const data = await res.json();
+                listaInmueblesGlobal = data;
+                const contenedor = document.getElementById("contenedorInmuebles");
+                contenedor.innerHTML = "";
+
+                if (data.length === 0) {
+                    contenedor.innerHTML = `<p class="text-muted col-12">No hay inmuebles disponibles en este momento.</p>`;
+                    return;
+                }
+
+                data.forEach((inm, index) => {
+                    const tieneFotos = inm.imagenes_base64 && inm.imagenes_base64.length > 0;
+                    const fotoPortada = tieneFotos ? inm.imagenes_base64[0] : null;
+                    const totalFotos = tieneFotos ? inm.imagenes_base64.length : 0;
+
+                    const imgHTML = fotoPortada 
+                        ? `<img src="${fotoPortada}" class="card-img-top carousel-img-thumb">`
+                        : `<div class="bg-secondary text-white text-center py-5 fs-5">Sin Fotografías</div>`;
+
+                    contenedor.innerHTML += `
+                        <div class="col-md-6 col-lg-4">
+                            <div class="card h-100 shadow-sm overflow-hidden border-0">
+                                <div class="position-relative">
+                                    ${imgHTML}
+                                    <span class="position-absolute bottom-0 end-0 bg-dark text-white opacity-75 px-2 py-1 m-2 rounded small">
+                                        🖼️ ${totalFotos} Fotos
+                                    </span>
+                                </div>
+                                <div class="card-body d-flex flex-column justify-content-between">
+                                    <div>
+                                        <div class="d-flex justify-content-between align-items-start mb-2">
+                                            <h6 class="fw-bold text-dark mb-0">${inm.direccion}</h6>
+                                            <span class="badge bg-secondary">${inm.barrio}</span>
+                                        </div>
+                                        <p class="fw-bold text-primary fs-5 mb-3">$${inm.canon_mensual.toLocaleString()} COP / mes</p>
+                                    </div>
+                                    <button class="btn btn-outline-primary w-100 fw-bold" onclick="abrirModalDetalle(${index})">
+                                        👁️ Ver Apartamento en Detalle
+                                    </button>
+                                </div>
+                            </div>
+                        </div>
+                    `;
+                });
+            } catch (err) {
+                console.error("Error al cargar catálogo:", err);
+            }
+        }
+
+        function abrirModalDetalle(index) {
+            const inm = listaInmueblesGlobal[index];
+            if (!inm) return;
+
+            document.getElementById("modalTitulo").innerText = `Apartamento en ${inm.barrio}`;
+            document.getElementById("modalDireccion").innerText = inm.direccion;
+            document.getElementById("modalBarrio").innerText = inm.barrio;
+            document.getElementById("modalCanon").innerText = `$${inm.canon_mensual.toLocaleString()} COP / mes`;
+            document.getElementById("modalPropietario").innerText = inm.propietario_nombre;
+            document.getElementById("modalCorreo").innerText = inm.propietario_correo;
+
+            const btnPostular = document.getElementById("btnPostularModal");
+            btnPostular.onclick = () => abrirFormularioPostulacion(inm.id_inmueble);
+
+            const carouselInner = document.getElementById("carouselDetalleInner");
+            carouselInner.innerHTML = "";
+
+            if (inm.imagenes_base64 && inm.imagenes_base64.length > 0) {
+                inm.imagenes_base64.forEach((foto, i) => {
+                    carouselInner.innerHTML += `
+                        <div class="carousel-item ${i === 0 ? 'active' : ''}">
+                            <img src="${foto}" class="d-block w-100 carousel-img-large">
+                        </div>
+                    `;
+                });
+            } else {
+                carouselInner.innerHTML = `
+                    <div class="carousel-item active">
+                        <div class="bg-secondary text-white text-center py-5 carousel-img-large d-flex align-items-center justify-content-center">
+                            <h4>No hay fotografías registradas</h4>
+                        </div>
+                    </div>
+                `;
+            }
+
+            const modal = new bootstrap.Modal(document.getElementById("modalDetalleInmueble"));
+            modal.show();
+        }
+
+        function abrirFormularioPostulacion(idInmueble) {
+            const modalDetalleEl = document.getElementById("modalDetalleInmueble");
+            const modalDetalle = bootstrap.Modal.getInstance(modalDetalleEl);
+            if (modalDetalle) modalDetalle.hide();
+
+            document.getElementById("postInmuebleId").value = idInmueble;
+            const modalForm = new bootstrap.Modal(document.getElementById("modalFormPostulacion"));
+            modalForm.show();
+        }
+
+        document.getElementById("formDatosPostulacion").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const payload = {
+                id_inmueble: parseInt(document.getElementById("postInmuebleId").value),
+                edad: parseInt(document.getElementById("postEdad").value),
+                ingresos: parseFloat(document.getElementById("postIngresos").value),
+                credit_score: parseInt(document.getElementById("postCreditScore").value),
+                dias_retraso_historico: parseInt(document.getElementById("postDiasRetraso").value),
+                empleado: document.getElementById("postEmpleado").value === "true"
+            };
+
+            try {
+                const res = await fetch(`${API_URL}/postular`, {
+                    method: "POST",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify(payload)
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert("¡Postulación enviada con éxito! Tus datos financieros han sido transferidos al Arrendador.");
+                    const modalFormEl = document.getElementById("modalFormPostulacion");
+                    const modalForm = bootstrap.Modal.getInstance(modalFormEl);
+                    if (modalForm) modalForm.hide();
+                } else {
+                    alert(data.detail || "Error al enviar la postulación.");
+                }
+            } catch (err) {
+                alert("Error de conexión: " + err.message);
+            }
+        });
+
+        async function generarEjemploContrato() {
+            const payload = { id_inmueble: 1, id_inquilino: 1, fecha_inicio: "2026-10-01", fecha_fin: "2027-10-01", canon: 988555 };
+            const res = await fetch(`${API_URL}/contratos/generar-cifrado`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById("visorContrato").classList.remove("d-none");
+                document.getElementById("textoCifradoAES").value = data.contrato_cifrado_base64;
+                document.getElementById("minutaDescreptada").innerText = data.minuta_original;
+            }
+        }
+
+        document.getElementById("formPasarela").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const payload = {
+                id_contrato: parseInt(document.getElementById("idContrato").value),
+                monto: parseFloat(document.getElementById("montoPago").value),
+                id_inquilino: 1
+            };
+
+            const res = await fetch(`${API_URL}/seguridad/hash-pago`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                const data = await res.json();
+                document.getElementById("resPago").classList.remove("d-none");
+                document.getElementById("resMedio").innerText = document.getElementById("medioPago").value;
+                document.getElementById("hashSHA256").innerText = data.hash_sha256;
+            } else {
+                alert("Error al procesar el pago digital");
+            }
+        });
+    </script>
+</body>
+</html>

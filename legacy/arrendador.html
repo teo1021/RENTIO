@@ -1,0 +1,510 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RENTIO - Panel del Arrendador</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #f8fafc; }
+        .card { border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        .img-preview-thumb { width: 100px; height: 80px; object-fit: cover; border-radius: 6px; }
+        .carousel-img-large { height: 380px; object-fit: cover; border-radius: 8px; }
+    </style>
+</head>
+<body>
+
+    <!-- NAV BAR -->
+    <nav class="navbar navbar-dark bg-dark px-4 d-flex justify-content-between align-items-center">
+        <a class="navbar-brand fw-bold text-primary" href="#">RENTIO <span class="fs-6 text-white fw-normal">| Panel Arrendador</span></a>
+        <div class="d-flex align-items-center">
+            <span class="badge bg-secondary me-3 px-3 py-2 fs-6" id="badgeUsuario">Cargando...</span>
+            <button class="btn btn-outline-danger btn-sm" onclick="cerrarSesion()">Cerrar Sesión</button>
+        </div>
+    </nav>
+
+    <div class="container my-4">
+        <!-- PESTAÑAS -->
+        <ul class="nav nav-tabs mb-4" id="panelTabs" role="tablist">
+            <li class="nav-item">
+                <button class="nav-link active fw-bold" id="evaluacion-tab" data-bs-toggle="tab" data-bs-target="#evaluacion" type="button">Motor de IA (Evaluación)</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-bold" id="postulaciones-tab" data-bs-toggle="tab" data-bs-target="#postulaciones" type="button" onclick="cargarPostulaciones()">Solicitudes Recibidas</button>
+            </li>
+            <li class="nav-item">
+                <button class="nav-link fw-bold" id="inmuebles-tab" data-bs-toggle="tab" data-bs-target="#inmuebles" type="button" onclick="cargarMisInmuebles()">Gestión de Mis Inmuebles</button>
+            </li>
+        </ul>
+
+        <div class="tab-content" id="panelTabsContent">
+            
+            <!-- TAB 1: EVALUACIÓN IA AUTO-COMPLETADA -->
+            <div class="tab-pane fade show active" id="evaluacion">
+                <div class="card p-4 mx-auto" style="max-width: 600px;">
+                    <h4 class="text-center mb-2">Evaluación de Riesgo de Inquilino</h4>
+                    <p class="small text-muted text-center mb-3">Los datos cargados provienen directamente de la solicitud enviada por el postulante.</p>
+                    <form id="formEvaluacion">
+                        <div class="mb-2"><label class="form-label small fw-bold">Edad:</label><input type="number" id="edad" class="form-control" value="28" required></div>
+                        <div class="mb-2"><label class="form-label small fw-bold">Ingresos Mensuales ($ COP):</label><input type="number" id="ingresos" class="form-control" value="2500000" required></div>
+                        <div class="mb-2"><label class="form-label small fw-bold">Credit Score (0-850):</label><input type="number" id="credit_score" class="form-control" value="650" required></div>
+                        <div class="mb-2"><label class="form-label small fw-bold">Canon Propiedad ($ COP):</label><input type="number" id="canon" class="form-control" value="900000" required></div>
+                        <div class="mb-2"><label class="form-label small fw-bold">Duración Contrato (Meses):</label><input type="number" id="duracion" class="form-control" value="12" required></div>
+                        <div class="mb-2"><label class="form-label small fw-bold">Días Retraso Habitual:</label><input type="number" id="dias_retraso" class="form-control" value="0" required></div>
+                        <div class="mb-3">
+                            <label class="form-label small fw-bold">Situación Laboral:</label>
+                            <select id="empleado" class="form-select">
+                                <option value="true">Empleado Formal</option>
+                                <option value="false">Independiente / Desempleado</option>
+                            </select>
+                        </div>
+                        <button type="submit" class="btn btn-primary w-100 fw-bold">EJECUTAR DIAGNÓSTICO NEURO-DIFUSO</button>
+                    </form>
+
+                    <div id="resultadoEvaluacion" class="mt-4 d-none p-3 border rounded text-center">
+                        <h5>Resultado del Análisis Neuro-Difuso</h5>
+                        <p class="mb-1"><strong>Evaluado por:</strong> <span id="resEvaluador"></span></p>
+                        <p class="mb-1"><strong>Índice de Riesgo:</strong> <span id="resScore" class="fs-3 fw-bold"></span> / 100</p>
+                        <div id="resAlerta" class="alert fw-bold my-2 fs-5"></div>
+                        <div id="contenedorExplicabilidad" class="mt-3"></div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 2: SOLICITUDES RECIBIDAS -->
+            <div class="tab-pane fade" id="postulaciones">
+                <div class="card p-4">
+                    <h5 class="mb-3">Solicitudes de Inquilinos Recibidas</h5>
+                    <div id="contenedorPostulaciones">
+                        <p class="text-muted">Cargando solicitudes...</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- TAB 3: MIS INMUEBLES PROPIOS -->
+            <div class="tab-pane fade" id="inmuebles">
+                <div class="card p-4 mb-4">
+                    <h5>Publicar Nuevo Inmueble (Selecciona mínimo 6 fotos)</h5>
+                    <form id="formInmueble" class="row g-2">
+                        <div class="col-md-4"><input type="text" id="dirInmueble" class="form-control" placeholder="Dirección exacta" required></div>
+                        <div class="col-md-3"><input type="text" id="barrioInmueble" class="form-control" value="Belén" required></div>
+                        <div class="col-md-3"><input type="number" id="canonInmueble" class="form-control" placeholder="Canon Mensual ($)" required></div>
+                        <div class="col-md-12 my-2">
+                            <label class="form-label small fw-bold">Fotografías del Inmueble:</label>
+                            <input type="file" id="fotosInmueble" class="form-control" accept="image/*" multiple required>
+                        </div>
+                        <div class="col-md-12"><button type="submit" class="btn btn-success w-100 fw-bold">Guardar y Publicar Propiedad</button></div>
+                    </form>
+                </div>
+                <div class="card p-4">
+                    <h5>Tus Propiedades Registradas</h5>
+                    <div id="listaInmuebles" class="row g-3 mt-1"></div>
+                </div>
+            </div>
+
+        </div>
+    </div>
+
+    <!-- MODAL DE INSPECCIÓN Y EDICIÓN COMPLETA DEL INMUEBLE -->
+    <div class="modal fade" id="modalEdicionInmueble" tabindex="-1" aria-hidden="true">
+        <div class="modal-dialog modal-xl modal-dialog-centered">
+            <div class="modal-content">
+                <div class="modal-header bg-dark text-white">
+                    <h5 class="modal-title fw-bold">🛠️ Inspección y Edición de Propiedad</h5>
+                    <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal" aria-label="Close"></button>
+                </div>
+                <div class="modal-body p-4">
+                    <div class="row g-4">
+                        <div class="col-lg-6 border-end">
+                            <h6 class="fw-bold mb-3">Inspección de Fotografías Registradas:</h6>
+                            <div id="carouselInspeccion" class="carousel slide shadow rounded overflow-hidden mb-3" data-bs-ride="carousel">
+                                <div class="carousel-inner" id="carouselInspeccionInner"></div>
+                                <button class="carousel-control-prev" type="button" data-bs-target="#carouselInspeccion" data-bs-slide="prev">
+                                    <span class="carousel-control-prev-icon bg-dark rounded-circle p-2"></span>
+                                </button>
+                                <button class="carousel-control-next" type="button" data-bs-target="#carouselInspeccion" data-bs-slide="next">
+                                    <span class="carousel-control-next-icon bg-dark rounded-circle p-2"></span>
+                                </button>
+                            </div>
+
+                            <h6 class="fw-bold mt-4 mb-2">Administrar Fotos (Eliminar / Agregar):</h6>
+                            <div id="listaGestionFotos" class="d-flex flex-wrap gap-2 mb-3 p-2 border rounded bg-light" style="max-height: 200px; overflow-y: auto;"></div>
+
+                            <div class="input-group mb-3">
+                                <input type="file" id="nuevasFotosInput" class="form-control" accept="image/*" multiple>
+                                <button class="btn btn-primary fw-bold" onclick="agregarMasFotos()">➕ Anexar Fotos</button>
+                            </div>
+                        </div>
+
+                        <div class="col-lg-6 d-flex flex-column justify-content-between">
+                            <div>
+                                <h6 class="fw-bold mb-3">Modificar Información Básica:</h6>
+                                <form id="formEditarDatos">
+                                    <input type="hidden" id="editIdInmueble">
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Dirección:</label>
+                                        <input type="text" id="editDireccion" class="form-control" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Barrio / Sector:</label>
+                                        <input type="text" id="editBarrio" class="form-control" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Canon Mensual ($ COP):</label>
+                                        <input type="number" id="editCanon" class="form-control" required>
+                                    </div>
+                                    <div class="mb-3">
+                                        <label class="form-label small fw-bold">Descripción:</label>
+                                        <textarea id="editDescripcion" class="form-control" rows="3"></textarea>
+                                    </div>
+                                    <button type="submit" class="btn btn-success w-100 fw-bold mb-3">💾 Guardar Cambios</button>
+                                </form>
+                            </div>
+
+                            <div class="border-top pt-3">
+                                <button class="btn btn-outline-danger w-100 fw-bold" onclick="eliminarInmuebleCompleto()">
+                                    🗑️ Eliminar Inmueble Definitivamente
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const API_URL = "http://127.0.0.1:8000/api";
+        const token = localStorage.getItem("access_token");
+        const nombreUsuario = localStorage.getItem("nombre_usuario");
+        const rol = localStorage.getItem("rol");
+
+        let misInmueblesGlobal = [];
+        let listaPostulacionesGlobal = [];
+        let inmSeleccionadoGlobal = null;
+
+        if (!token || rol !== "arrendador") {
+            alert("Acceso denegado. Debe ser un Arrendador autenticado.");
+            cerrarSesion();
+        } else {
+            document.getElementById("badgeUsuario").innerText = "👤 " + nombreUsuario + " (Arrendador)";
+        }
+
+        function cerrarSesion() {
+            localStorage.clear();
+            window.location.href = "login.html";
+        }
+
+        // EVALUACIÓN CON IA
+        document.getElementById("formEvaluacion").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const payload = {
+                edad: parseInt(document.getElementById("edad").value),
+                ingresos: parseFloat(document.getElementById("ingresos").value),
+                credit_score: parseInt(document.getElementById("credit_score").value),
+                canon: parseFloat(document.getElementById("canon").value),
+                duracion_meses: parseInt(document.getElementById("duracion").value),
+                dias_retraso_historico: parseInt(document.getElementById("dias_retraso").value),
+                empleado: document.getElementById("empleado").value === "true"
+            };
+
+            const res = await fetch(`${API_URL}/evaluar-inquilino`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+
+            const data = await res.json();
+            document.getElementById("resultadoEvaluacion").classList.remove("d-none");
+            document.getElementById("resEvaluador").innerText = data.evaluado_por;
+            document.getElementById("resScore").innerText = data.indice_riesgo_final;
+            
+            const alertaDiv = document.getElementById("resAlerta");
+            alertaDiv.innerText = data.recomendacion;
+            alertaDiv.className = data.nivel_riesgo === "Bajo" ? "alert alert-success fw-bold my-2 fs-5" : (data.nivel_riesgo === "Moderado" ? "alert alert-warning fw-bold my-2 fs-5" : "alert alert-danger fw-bold my-2 fs-5");
+
+            let listaRazonesHTML = "<ul class='text-start mb-0 small alert alert-light border'>";
+            data.desglose_explicabilidad.forEach(r => { listaRazonesHTML += `<li class='mb-1'>📌 ${r}</li>`; });
+            listaRazonesHTML += "</ul>";
+            document.getElementById("contenedorExplicabilidad").innerHTML = "<h6><strong>Factores Determinantes:</strong></h6>" + listaRazonesHTML;
+        });
+
+        // CARGAR POSTULACIONES
+        async function cargarPostulaciones() {
+            const res = await fetch(`${API_URL}/postulaciones/recibidas`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const data = await res.json();
+            listaPostulacionesGlobal = data;
+            const contenedor = document.getElementById("contenedorPostulaciones");
+            contenedor.innerHTML = "";
+
+            if (data.length === 0) {
+                contenedor.innerHTML = `<p class="text-muted">No has recibido solicitudes para tus propiedades aún.</p>`;
+                return;
+            }
+
+            data.forEach((p, idx) => {
+                contenedor.innerHTML += `
+                    <div class="border rounded p-3 mb-3 bg-white shadow-sm d-flex justify-content-between align-items-center">
+                        <div>
+                            <h6 class="fw-bold text-dark mb-1">👤 ${p.nombre_inquilino} (${p.correo_inquilino})</h6>
+                            <p class="small text-muted mb-1">🏠 <strong>Propiedad:</strong> ${p.direccion_inmueble} | <strong>Canon:</strong> $${p.canon.toLocaleString()} COP</p>
+                            <p class="small mb-0">💼 <strong>Perfil:</strong> Ingresos: $${p.ingresos.toLocaleString()} | Score: ${p.credit_score} | Edad: ${p.edad} | Mora: ${p.dias_retraso_historico} días</p>
+                        </div>
+                        <div class="text-end">
+                            <span class="badge bg-warning text-dark d-block mb-2">${p.estado}</span>
+                            <button class="btn btn-primary fw-bold btn-sm" onclick="transferirEevaluarIA(${idx})">🤖 Evaluar con IA</button>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        // TRANSFERENCIA AUTOMÁTICA DE DATOS DEL POSTULANTE AL MOTOR DE IA
+        function transferirEevaluarIA(idx) {
+            const p = listaPostulacionesGlobal[idx];
+            if (!p) return;
+
+            document.getElementById("edad").value = p.edad;
+            document.getElementById("ingresos").value = p.ingresos;
+            document.getElementById("credit_score").value = p.credit_score;
+            document.getElementById("canon").value = p.canon;
+            document.getElementById("dias_retraso").value = p.dias_retraso_historico;
+            document.getElementById("empleado").value = p.empleado ? "true" : "false";
+
+            const evalTab = new bootstrap.Tab(document.getElementById("evaluacion-tab"));
+            evalTab.show();
+
+            // EJECUTAR AUTO-EVALUACIÓN AL INSTANTE
+            document.getElementById("formEvaluacion").dispatchEvent(new Event('submit'));
+        }
+
+        // MIS INMUEBLES PROPIOS
+        async function cargarMisInmuebles() {
+            const res = await fetch(`${API_URL}/inmuebles/mis-inmuebles`, {
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+            const data = await res.json();
+            misInmueblesGlobal = data;
+            const lista = document.getElementById("listaInmuebles");
+            lista.innerHTML = "";
+
+            if (data.length === 0) {
+                lista.innerHTML = `<p class="text-muted col-12">No tienes inmuebles registrados a tu nombre.</p>`;
+                return;
+            }
+
+            data.forEach((inm, idx) => {
+                const tieneFotos = inm.imagenes_base64 && inm.imagenes_base64.length > 0;
+                const primeraFoto = tieneFotos ? inm.imagenes_base64[0] : null;
+                const totalFotos = tieneFotos ? inm.imagenes_base64.length : 0;
+
+                const imgHTML = primeraFoto 
+                    ? `<img src="${primeraFoto}" class="card-img-top" style="height: 180px; object-fit: cover;">`
+                    : `<div class="bg-secondary text-white text-center py-4">Sin Fotografías</div>`;
+
+                lista.innerHTML += `
+                    <div class="col-md-6 col-lg-4">
+                        <div class="card h-100 overflow-hidden shadow-sm border-0">
+                            ${imgHTML}
+                            <div class="card-body d-flex flex-column justify-content-between">
+                                <div>
+                                    <h6 class="card-title fw-bold">${inm.direccion}</h6>
+                                    <p class="card-text small text-muted mb-1">Barrio: ${inm.barrio}</p>
+                                    <p class="card-text fw-bold text-primary mb-2">$${inm.canon_mensual.toLocaleString()} COP / mes</p>
+                                    <span class="badge bg-info text-dark mb-3">🖼️ ${totalFotos} Fotos Almacenadas</span>
+                                </div>
+                                <button class="btn btn-outline-dark w-100 fw-bold btn-sm" onclick="abrirModalInspeccion(${idx})">
+                                    👁️ Inspeccionar y Editar
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            });
+        }
+
+        document.getElementById("formInmueble").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const fileInput = document.getElementById("fotosInmueble");
+            let arregloBase64 = [];
+
+            if (fileInput.files.length > 0) {
+                for (let i = 0; i < fileInput.files.length; i++) {
+                    const file = fileInput.files[i];
+                    const b64 = await new Promise((resolve) => {
+                        const reader = new FileReader();
+                        reader.onload = () => resolve(reader.result);
+                        reader.readAsDataURL(file);
+                    });
+                    arregloBase64.push(b64);
+                }
+            }
+
+            const payload = {
+                direccion: document.getElementById("dirInmueble").value,
+                barrio: document.getElementById("barrioInmueble").value,
+                canon_mensual: parseFloat(document.getElementById("canonInmueble").value),
+                descripcion: "Inmueble registrado",
+                imagenes_base64: arregloBase64
+            };
+
+            const res = await fetch(`${API_URL}/inmuebles`, {
+                method: "POST",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert(`¡Inmueble registrado con éxito con sus ${arregloBase64.length} imágenes!`);
+                document.getElementById("formInmueble").reset();
+                cargarMisInmuebles();
+            }
+        });
+
+        function abrirModalInspeccion(index) {
+            inmSeleccionadoGlobal = misInmueblesGlobal[index];
+            if (!inmSeleccionadoGlobal) return;
+
+            document.getElementById("editIdInmueble").value = inmSeleccionadoGlobal.id_inmueble;
+            document.getElementById("editDireccion").value = inmSeleccionadoGlobal.direccion;
+            document.getElementById("editBarrio").value = inmSeleccionadoGlobal.barrio;
+            document.getElementById("editCanon").value = inmSeleccionadoGlobal.canon_mensual;
+            document.getElementById("editDescripcion").value = inmSeleccionadoGlobal.descripcion || "";
+
+            renderizarCarruselYFotosModal();
+
+            const modal = new bootstrap.Modal(document.getElementById("modalEdicionInmueble"));
+            modal.show();
+        }
+
+        function renderizarCarruselYFotosModal() {
+            const fotos = inmSeleccionadoGlobal.imagenes_base64 || [];
+            const carouselInner = document.getElementById("carouselInspeccionInner");
+            const listaGestion = document.getElementById("listaGestionFotos");
+
+            carouselInner.innerHTML = "";
+            listaGestion.innerHTML = "";
+
+            if (fotos.length > 0) {
+                fotos.forEach((f, idx) => {
+                    carouselInner.innerHTML += `
+                        <div class="carousel-item ${idx === 0 ? 'active' : ''}">
+                            <img src="${f}" class="d-block w-100 carousel-img-large">
+                        </div>
+                    `;
+
+                    listaGestion.innerHTML += `
+                        <div class="position-relative d-inline-block">
+                            <img src="${f}" class="img-preview-thumb border">
+                            <button class="btn btn-danger btn-sm position-absolute top-0 end-0 p-0 px-1 m-1" onclick="eliminarFotoEspecifica(${idx})" title="Eliminar Foto">×</button>
+                        </div>
+                    `;
+                });
+            } else {
+                carouselInner.innerHTML = `
+                    <div class="carousel-item active">
+                        <div class="bg-secondary text-white text-center py-5 carousel-img-large d-flex align-items-center justify-content-center">
+                            <h5>Sin fotos registradas</h5>
+                        </div>
+                    </div>
+                `;
+                listaGestion.innerHTML = `<span class="text-muted small">No hay fotos en la galería</span>`;
+            }
+        }
+
+        document.getElementById("formEditarDatos").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const idInm = document.getElementById("editIdInmueble").value;
+            const payload = {
+                direccion: document.getElementById("editDireccion").value,
+                barrio: document.getElementById("editBarrio").value,
+                canon_mensual: parseFloat(document.getElementById("editCanon").value),
+                descripcion: document.getElementById("editDescripcion").value
+            };
+
+            const res = await fetch(`${API_URL}/inmuebles/${idInm}`, {
+                method: "PUT",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                alert("¡Información del inmueble actualizada!");
+                cargarMisInmuebles();
+            } else {
+                alert("Error al actualizar información");
+            }
+        });
+
+        async function eliminarFotoEspecifica(idxFoto) {
+            if (!confirm("¿Deseas eliminar esta fotografía de la propiedad?")) return;
+
+            inmSeleccionadoGlobal.imagenes_base64.splice(idxFoto, 1);
+            
+            const res = await fetch(`${API_URL}/inmuebles/${inmSeleccionadoGlobal.id_inmueble}/fotos`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ imagenes_base64: inmSeleccionadoGlobal.imagenes_base64 })
+            });
+
+            if (res.ok) {
+                renderizarCarruselYFotosModal();
+                cargarMisInmuebles();
+            }
+        }
+
+        async function agregarMasFotos() {
+            const fileInput = document.getElementById("nuevasFotosInput");
+            if (fileInput.files.length === 0) {
+                alert("Selecciona al menos una imagen para anexar.");
+                return;
+            }
+
+            for (let i = 0; i < fileInput.files.length; i++) {
+                const file = fileInput.files[i];
+                const b64 = await new Promise((resolve) => {
+                    const reader = new FileReader();
+                    reader.onload = () => resolve(reader.result);
+                    reader.readAsDataURL(file);
+                });
+                inmSeleccionadoGlobal.imagenes_base64.push(b64);
+            }
+
+            const res = await fetch(`${API_URL}/inmuebles/${inmSeleccionadoGlobal.id_inmueble}/fotos`, {
+                method: "PATCH",
+                headers: { "Content-Type": "application/json", "Authorization": `Bearer ${token}` },
+                body: JSON.stringify({ imagenes_base64: inmSeleccionadoGlobal.imagenes_base64 })
+            });
+
+            if (res.ok) {
+                alert("¡Nuevas fotos anexadas con éxito!");
+                fileInput.value = "";
+                renderizarCarruselYFotosModal();
+                cargarMisInmuebles();
+            }
+        }
+
+        async function eliminarInmuebleCompleto() {
+            if (!confirm("⚠️ ¿ESTÁS SEGURO DE ELIMINAR COMPLETAMENTE ESTE INMUEBLE?")) return;
+
+            const res = await fetch(`${API_URL}/inmuebles/${inmSeleccionadoGlobal.id_inmueble}`, {
+                method: "DELETE",
+                headers: { "Authorization": `Bearer ${token}` }
+            });
+
+            if (res.ok) {
+                alert("Inmueble eliminado correctamente.");
+                const modalEl = document.getElementById("modalEdicionInmueble");
+                const modal = bootstrap.Modal.getInstance(modalEl);
+                if (modal) modal.hide();
+                cargarMisInmuebles();
+            } else {
+                alert("Error al eliminar el inmueble.");
+            }
+        }
+    </script>
+</body>
+</html>

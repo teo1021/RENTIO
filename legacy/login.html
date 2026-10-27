@@ -1,0 +1,76 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>RENTIO - Iniciar Sesión</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <style>
+        body { background-color: #1e293b; }
+        .card { border-radius: 12px; }
+    </style>
+</head>
+<body class="d-flex align-items-center justify-content-center vh-100">
+    <div class="card p-4 shadow-lg text-white bg-dark" style="width: 380px;">
+        <h3 class="text-center text-primary fw-bold">RENTIO</h3>
+        <p class="text-center text-muted small">Plataforma Inteligente de Arrendamientos</p>
+        
+        <form id="formLogin">
+            <div class="mb-3">
+                <label class="form-label">Correo Electrónico:</label>
+                <input type="email" id="correo" class="form-control" required placeholder="correo@ejemplo.com">
+            </div>
+            <div class="mb-3">
+                <label class="form-label">Contraseña:</label>
+                <input type="password" id="contrasena" class="form-control" required placeholder="******">
+            </div>
+            <button type="submit" class="btn btn-primary w-100 fw-bold mb-3">INGRESAR AL SISTEMA</button>
+        </form>
+
+        <hr class="border-secondary">
+        
+        <div class="text-center">
+            <p class="small text-muted mb-1">¿No tienes una cuenta aún?</p>
+            <a href="registro.html" class="btn btn-outline-success btn-sm w-100">Crear una Cuenta Nueva</a>
+        </div>
+    </div>
+
+    <script>
+        const API_URL = "http://127.0.0.1:8000/api";
+
+        document.getElementById("formLogin").addEventListener("submit", async (e) => {
+            e.preventDefault();
+            const formData = new URLSearchParams();
+            formData.append("username", document.getElementById("correo").value);
+            formData.append("password", document.getElementById("contrasena").value);
+
+            try {
+                const res = await fetch(`${API_URL}/login`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/x-www-form-urlencoded" },
+                    body: formData
+                });
+
+                const data = await res.json();
+                if (res.ok) {
+                    localStorage.setItem("access_token", data.access_token);
+                    localStorage.setItem("nombre_usuario", data.nombre);
+                    localStorage.setItem("rol", data.rol);
+                    
+                    alert("¡Bienvenido/a " + data.nombre + "!");
+                    
+                    if (data.rol === "arrendador") {
+                        window.location.href = "arrendador.html";
+                    } else {
+                        window.location.href = "inquilino.html";
+                    }
+                } else {
+                    alert(data.detail || "Correo o contraseña incorrectos");
+                }
+            } catch (err) {
+                alert("Error de conexión: " + err.message);
+            }
+        });
+    </script>
+</body>
+</html>
