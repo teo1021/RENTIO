@@ -1,1 +1,11 @@
 Single-database configuration for Flask.
+
+RENTIO is bootstrapped from an empty PostgreSQL database with
+`backend/sql/create_database.sql`. The initial project did not have a core
+Alembic revision history; the first revision in `versions/` adds the IA
+marketing schema to a database whose core tables already exist.
+
+For a database created from the complete SQL bootstrap, run
+`flask --app app.py db stamp head` from `backend` to record the current
+revision before making later migrations. For a pre-existing database with
+the core tables but no IA schema, run `flask --app app.py db upgrade`.

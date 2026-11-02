@@ -1,42 +1,36 @@
-"""
-Crea la base de datos MySQL a partir de las variables de entorno en .env.
-
-Uso:
-    python scripts/create_db.py
-"""
-
+"""Crea una base de datos vacía PostgreSQL usando las variables de entorno."""
 import os
 
-import pymysql
+import psycopg2
 from dotenv import load_dotenv
+from psycopg2 import sql
 
 load_dotenv()
 
-DB_USER = os.getenv("DB_USER", "root")
+DB_USER = os.getenv("DB_USER", "postgres")
 DB_PASSWORD = os.getenv("DB_PASSWORD", "")
 DB_HOST = os.getenv("DB_HOST", "localhost")
-DB_PORT = int(os.getenv("DB_PORT", "3306"))
-DB_NAME = os.getenv("DB_NAME", "arriendos_medellin_db")
-DB_CHARSET = os.getenv("DB_CHARSET", "utf8mb4")
+DB_PORT = int(os.getenv("DB_PORT", "5432"))
+DB_NAME = os.getenv("DB_NAME", "rentio")
 
 
 def main():
-    print(f"Conectando al servidor MySQL en {DB_HOST}:{DB_PORT}...")
+    print(f"Conectando al servidor PostgreSQL en {DB_HOST}:{DB_PORT}...")
     try:
-        connection = pymysql.connect(
-            host=DB_HOST,
-            port=DB_PORT,
-            user=DB_USER,
-            password=DB_PASSWORD,
-            charset=DB_CHARSET,
+        connection = psycopg2.connect(
+            host=DB_HOST, port=DB_PORT, user=DB_USER, password=DB_PASSWORD, dbname="postgres"
         )
+        connection.autocommit = True
         with connection.cursor() as cursor:
-            sql = f"CREATE DATABASE IF NOT EXISTS `{DB_NAME}` CHARACTER SET {DB_CHARSET} COLLATE {DB_CHARSET}_unicode_ci;"
-            cursor.execute(sql)
-            print(f" Base de datos '{DB_NAME}' creada o verificada exitosamente.")
+            cursor.execute("SELECT 1 FROM pg_database WHERE datname = %s", (DB_NAME,))
+            if cursor.fetchone() is None:
+                cursor.execute(sql.SQL("CREATE DATABASE {}").format(sql.Identifier(DB_NAME)))
+                print(f"Base de datos '{DB_NAME}' creada.")
+            else:
+                print(f"La base de datos '{DB_NAME}' ya existe.")
         connection.close()
     except Exception as e:
-        print(f" Error al conectar o crear la base de datos: {e}")
+        raise SystemExit(f"No se pudo crear o verificar la base de datos: {e}") from e
 
 
 if __name__ == "__main__":

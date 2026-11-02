@@ -10,6 +10,15 @@ import uuid
 from pathlib import Path
 
 import pytest
+from sqlalchemy import event
+from sqlalchemy.engine import Engine
+
+
+@event.listens_for(Engine, "connect")
+def _attach_ia_schema_sqlite(dbapi_connection, connection_record):
+    """Simula el esquema PostgreSQL del módulo IA al usar SQLite en pruebas."""
+    if dbapi_connection.__class__.__module__.startswith("sqlite3"):
+        dbapi_connection.execute("ATTACH DATABASE ':memory:' AS ia_marketing")
 
 # Asegurar que el directorio backend esté en sys.path
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))

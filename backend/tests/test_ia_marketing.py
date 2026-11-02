@@ -3,7 +3,23 @@ Tests automatizados para el dominio de IA Marketing.
 """
 
 
-def test_ia_marketing_generar_descripcion(client, propietario_auth, arrendatario_auth):
+def _mock_ia(monkeypatch):
+    from app.dominios.ia_marketing import controladores
+
+    def responder(endpoint, datos):
+        if endpoint.endswith("generar-descripcion"):
+            return {"descripcion": "Texto de prueba", "puntos_destacados": ["Laureles"]}
+        if endpoint.endswith("estimar-precio"):
+            return {"precio_sugerido": 3400000, "precio_minimo": 3000000, "precio_maximo": 5200000}
+        if endpoint.endswith("analisis-mercado"):
+            return {"nivel_demanda": "Alta", "tiempo_promedio_vacancia_dias": 20}
+        return {"titulos_sugeridos": ["Uno", "Dos"]}
+
+    monkeypatch.setattr(controladores, "solicitar_a_ia", responder)
+
+
+def test_ia_marketing_generar_descripcion(client, propietario_auth, arrendatario_auth, monkeypatch):
+    _mock_ia(monkeypatch)
     """Verifica la generación de descripción atractiva con IA (solo propietario)."""
     payload = {
         "barrio": "El Poblado",
@@ -37,7 +53,8 @@ def test_ia_marketing_generar_descripcion(client, propietario_auth, arrendatario
     assert len(datos["data"]["puntos_destacados"]) >= 1
 
 
-def test_ia_marketing_sugerir_precio(client, propietario_auth):
+def test_ia_marketing_sugerir_precio(client, propietario_auth, monkeypatch):
+    _mock_ia(monkeypatch)
     """Verifica la sugerencia y estimación de rangos de precio con IA."""
     payload = {
         "barrio": "Laureles",
@@ -58,7 +75,8 @@ def test_ia_marketing_sugerir_precio(client, propietario_auth):
     assert datos["precio_minimo"] <= datos["precio_sugerido"] <= datos["precio_maximo"]
 
 
-def test_ia_marketing_analisis_mercado(client, propietario_auth):
+def test_ia_marketing_analisis_mercado(client, propietario_auth, monkeypatch):
+    _mock_ia(monkeypatch)
     """Verifica la generación de análisis de mercado por barrio en Medellín."""
     payload = {
         "barrio": "Belén",
@@ -76,7 +94,8 @@ def test_ia_marketing_analisis_mercado(client, propietario_auth):
     assert "tiempo_promedio_vacancia_dias" in datos
 
 
-def test_ia_marketing_mejorar_titulo(client, propietario_auth):
+def test_ia_marketing_mejorar_titulo(client, propietario_auth, monkeypatch):
+    _mock_ia(monkeypatch)
     """Verifica la optimización de títulos llamativos para portales."""
     payload = {
         "titulo_actual": "Apartamento arriendo medellin",

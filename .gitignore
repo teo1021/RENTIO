@@ -1,0 +1,11 @@
+.env
+**/.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.ruff_cache/
+backend/.venv/
+backend/venv/
+frontend/node_modules/
+backend/uploads/*
+!backend/uploads/.gitkeep

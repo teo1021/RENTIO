@@ -72,10 +72,6 @@ def crear_app(config_class=None):
         CaracteristicaServicio,
     )
     from app.dominios.ia_marketing import controladores as ia_ctrl
-    from app.dominios.ia_marketing.servicios import (
-        IAMarketingError,
-        IAMarketingServicio,
-    )
     from app.dominios.propiedades import controladores as propiedades_ctrl
     from app.dominios.propiedades.servicios import (
         PermisoPropiedadError,
@@ -95,7 +91,6 @@ def crear_app(config_class=None):
     caracteristicas_ctrl.servicio = CaracteristicaServicio()
     barrios_ctrl.servicio = BarrioServicio()
     arriendos_ctrl.servicio = ArriendoServicio()
-    ia_ctrl.servicio = IAMarketingServicio()
 
     # ── Registrar Blueprints ─────────────────────────────────────────────
     app.register_blueprint(usuarios_ctrl.usuarios_bp, url_prefix="/api/v1/usuarios")
@@ -161,9 +156,6 @@ def crear_app(config_class=None):
     app.register_error_handler(CaracteristicaDuplicadaError, _crear_error_handler(409))
     app.register_error_handler(BarrioDuplicadoError, _crear_error_handler(409))
     app.register_error_handler(SolicitudDuplicadaError, _crear_error_handler(409))
-
-    # 502 Bad Gateway / IA Error
-    app.register_error_handler(IAMarketingError, _crear_error_handler(502))
 
     # Handlers HTTP genéricos
     @app.errorhandler(404)

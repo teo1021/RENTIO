@@ -6,6 +6,7 @@ de Flask y SQLAlchemy.
 """
 
 import os
+
 from dotenv import load_dotenv
 
 load_dotenv()
@@ -17,7 +18,7 @@ class Config:
     TESTING = os.getenv("FLASK_TESTING", "false").lower() == "true"
 
     # ── Seguridad ───────────────────────────────────────────────────────
-    SECRET_KEY = os.getenv("SECRET_KEY", "clave_segura_123")
+    SECRET_KEY = os.getenv("SECRET_KEY", "")
     JWT_EXP_MINUTES = int(os.getenv("JWT_EXP_MINUTES", "15"))
 
     # ── CORS ────────────────────────────────────────────────────────────
@@ -25,16 +26,17 @@ class Config:
 
     # ── Base de datos ───────────────────────────────────────────────────
     DB_USER = os.getenv("DB_USER", "postgres")
-    DB_PASSWORD = os.getenv("DB_PASSWORD", "bedoya1021")
+    DB_PASSWORD = os.getenv("DB_PASSWORD", "")
     DB_HOST = os.getenv("DB_HOST", "localhost")
     DB_PORT = os.getenv("DB_PORT", "5433")
     DB_NAME = os.getenv("DB_NAME", "rentio_electiva_3")
-    DB_CHARSET = os.getenv("DB_CHARSET", "utf8mb4")
 
     # ── Inteligencia Artificial ─────────────────────────────────────────
     AI_PROVIDER = os.getenv("AI_PROVIDER", "openai")
     AI_API_KEY = os.getenv("AI_API_KEY", "")
     AI_MODEL = os.getenv("AI_MODEL", "gpt-4o-mini")
+    AI_SERVICE_URL = os.getenv("AI_SERVICE_URL", "http://localhost:5001")
+    AI_INTERNAL_API_KEY = os.getenv("AI_INTERNAL_API_KEY", "")
 
     # ── SQLAlchemy ──────────────────────────────────────────────────────
     SQLALCHEMY_TRACK_MODIFICATIONS = False
