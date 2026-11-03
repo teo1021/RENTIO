@@ -1,3 +1,4 @@
+
 import { useEffect, useState, type ReactNode } from 'react';
 import { BrowserRouter, Navigate, Route, Routes } from 'react-router-dom';
 import { LoaderCircle } from 'lucide-react';
@@ -16,6 +17,32 @@ import IAMarketing from './pages/marketing/IAMarketing';
 import Profile from './pages/perfil/Profile';
 import Catalogos from './pages/catalogos/Catalogos';
 
+type ProtectedProps = {
+  children: ReactNode;
+  roles?: Rol[];
+};
+
+// IMPORTANTE: estos componentes deben estar fuera de AppRoutes.
+function Protected({ children, roles }: ProtectedProps) {
+  const authenticated = useAuthStore((state) => state.isAuthenticated);
+  const user = useAuthStore((state) => state.user);
+
+  if (!authenticated) return <Navigate to="/login" replace />;
+  if (roles && user && !roles.includes(user.rol)) {
+    return <Navigate to="/dashboard" replace />;
+  }
+
+  return children;
+}
+
+function Guest({ children }: { children: ReactNode }) {
+  const authenticated = useAuthStore((state) => state.isAuthenticated);
+
+  return authenticated
+    ? <Navigate to="/dashboard" replace />
+    : children;
+}
+
 function Bootstrap() {
   const token = useAuthStore((state) => state.token);
   const user = useAuthStore((state) => state.user);
@@ -25,56 +52,120 @@ function Bootstrap() {
 
   useEffect(() => {
     let active = true;
+
     if (!token) {
       setReady(true);
       finishBootstrap();
-      return () => { active = false; };
+      return () => {
+        active = false;
+      };
     }
+
     if (!user) {
       authApi.profile()
-        .then((profile) => { if (active) setUser(profile); })
-        .catch(() => { /* Axios interceptor clears invalid JWTs. */ })
-        .finally(() => { if (active) { finishBootstrap(); setReady(true); } });
+        .then((profile) => {
+          if (active) setUser(profile);
+        })
+        .catch(() => {
+          // El interceptor de Axios gestiona los JWT inválidos.
+        })
+        .finally(() => {
+          if (active) {
+            finishBootstrap();
+            setReady(true);
+          }
+        });
     } else {
       finishBootstrap();
       setReady(true);
     }
-    return () => { active = false; };
+
+    return () => {
+      active = false;
+    };
   }, [token, user, setUser, finishBootstrap]);
 
-  if (!ready) return <div className="app-loading"><LoaderCircle className="animate-spin" size={28} /><span>Preparando tu espacio RENTIO...</span></div>;
+  if (!ready) {
+    return (
+      <div className="app-loading">
+        <LoaderCircle className="animate-spin" size={28} />
+        <span>Preparando tu espacio RENTIO...</span>
+      </div>
+    );
+  }
+
   return <AppRoutes />;
 }
 
 function AppRoutes() {
   const authenticated = useAuthStore((state) => state.isAuthenticated);
-  const user = useAuthStore((state) => state.user);
-  const Protected = ({ children, roles }: { children: ReactNode; roles?: Rol[] }) => {
-    if (!authenticated) return <Navigate to="/login" replace />;
-    if (roles && user && !roles.includes(user.rol)) return <Navigate to="/dashboard" replace />;
-    return children;
-  };
-  const Guest = ({ children }: { children: ReactNode }) => authenticated ? <Navigate to="/dashboard" replace /> : children;
 
-  return <Routes>
-    <Route element={<AuthLayout />}>
-      <Route path="/login" element={<Guest><Login /></Guest>} />
-      <Route path="/register" element={<Guest><Register /></Guest>} />
-    </Route>
-    <Route path="/" element={<Protected><DashboardLayout /></Protected>}>
-      <Route index element={<Navigate to="/dashboard" replace />} />
-      <Route path="dashboard" element={<Dashboard />} />
-      <Route path="propiedades" element={<Protected><PropiedadesList /></Protected>} />
-      <Route path="arriendos" element={<Protected roles={['arrendatario', 'propietario']}><ArriendosList /></Protected>} />
-      <Route path="usuarios" element={<Protected roles={['admin']}><UsuariosList /></Protected>} />
-      <Route path="catalogos" element={<Protected roles={['admin']}><Catalogos /></Protected>} />
-      <Route path="marketing-ia" element={<Protected roles={['propietario']}><IAMarketing /></Protected>} />
-      <Route path="perfil" element={<Profile />} />
-    </Route>
-    <Route path="*" element={<Navigate to={authenticated ? '/dashboard' : '/login'} replace />} />
-  </Routes>;
+  return (
+    <Routes>
+      <Route element={<AuthLayout />}>
+        <Route path="/login" element={<Guest><Login /></Guest>} />
+        <Route path="/register" element={<Guest><Register /></Guest>} />
+      </Route>
+
+      <Route
+        path="/"
+        element={<Protected><DashboardLayout /></Protected>}
+      >
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<Dashboard />} />
+        <Route path="propiedades" element={<PropiedadesList />} />
+        <Route
+          path="arriendos"
+          element={
+            <Protected roles={['arrendatario', 'propietario']}>
+              <ArriendosList />
+            </Protected>
+          }
+        />
+        <Route
+          path="usuarios"
+          element={
+            <Protected roles={['admin']}>
+              <UsuariosList />
+            </Protected>
+          }
+        />
+        <Route
+          path="catalogos"
+          element={
+            <Protected roles={['admin']}>
+              <Catalogos />
+            </Protected>
+          }
+        />
+        <Route
+          path="marketing-ia"
+          element={
+            <Protected roles={['propietario']}>
+              <IAMarketing />
+            </Protected>
+          }
+        />
+        <Route path="perfil" element={<Profile />} />
+      </Route>
+
+      <Route
+        path="*"
+        element={
+          <Navigate
+            to={authenticated ? '/dashboard' : '/login'}
+            replace
+          />
+        }
+      />
+    </Routes>
+  );
 }
 
 export default function App() {
-  return <BrowserRouter><Bootstrap /></BrowserRouter>;
+  return (
+    <BrowserRouter>
+      <Bootstrap />
+    </BrowserRouter>
+  );
 }
