@@ -34,6 +34,13 @@ export default function PropiedadesList() {
   const [form, setForm] = useState<PropertyForm>(blankForm);
   const [selectedFeatures, setSelectedFeatures] = useState<number[]>([]);
   const [requestMessage, setRequestMessage] = useState('');
+  const [selectedImages, setSelectedImages] = useState<File[]>([]);
+  const [imagePreviews, setImagePreviews] = useState<string[]>([]);
+  useEffect(() => {
+    const urls = selectedImages.map((file) => URL.createObjectURL(file));
+    setImagePreviews(urls);
+    return () => urls.forEach((url) => URL.revokeObjectURL(url));
+  }, [selectedImages]);
 
   async function loadData() {
     setLoading(true); setError('');
@@ -58,7 +65,7 @@ export default function PropiedadesList() {
   }), [items, search, statusFilter, typeFilter, isTenant]);
 
   const updateForm = (key: keyof PropertyForm, value: string) => setForm((current) => ({ ...current, [key]: value }));
-  const openCreate = () => { setSelected(null); setForm(blankForm); setSelectedFeatures([]); setError(''); setModal('create'); };
+  const openCreate = () => { setSelected(null); setForm(blankForm); setSelectedFeatures([]); setSelectedImages([]); setError(''); setModal('create'); };
   async function openDetails(property: Propiedad) {
     setSelected(property); setError(''); setModal('detail'); setDetailLoading(true);
     try { setSelected(await propertiesApi.get(property.id)); }
@@ -66,7 +73,7 @@ export default function PropiedadesList() {
     finally { setDetailLoading(false); }
   }
   const openEdit = (property: Propiedad) => {
-    setSelected(property);
+    setSelected(property); setSelectedImages([]);
     setForm({ titulo: property.titulo, descripcion: property.descripcion || '', precio_mensual: String(property.precio_mensual), direccion: property.direccion, estrato: String(property.estrato), area_m2: property.area_m2 ? String(property.area_m2) : '', habitaciones: String(property.habitaciones), banos: String(property.banos), tipo: property.tipo, barrio_id: property.barrio_id ? String(property.barrio_id) : '' });
     setSelectedFeatures(property.caracteristicas.map((feature) => feature.id)); setError(''); setModal('edit');
   };
@@ -82,17 +89,38 @@ export default function PropiedadesList() {
     try {
       if (modal === 'create') {
         payload.caracteristicas_ids = selectedFeatures;
-        await propertiesApi.create(payload);
+        const created = await propertiesApi.create(payload);
+        if (selectedImages.length) await propertiesApi.uploadImages(created.id, selectedImages);
         setSuccess('La propiedad se creó correctamente.');
       } else if (selected) {
         payload.estado = selected.estado;
         await propertiesApi.update(selected.id, payload);
         await propertiesApi.updateFeatures(selected.id, selectedFeatures);
+        if (selectedImages.length) await propertiesApi.uploadImages(selected.id, selectedImages);
         setSuccess('Los cambios de la propiedad fueron guardados.');
       }
       setModal(null); await loadData();
     } catch (err) { setError(getApiError(err, 'No fue posible guardar la propiedad.')); }
     finally { setSaving(false); }
+  }
+
+  function selectPropertyImages(files: FileList | null) {
+    if (!files) return;
+    const incoming = Array.from(files);
+    const existingCount = modal === 'edit' ? selected?.imagenes.length || 0 : 0;
+    if (existingCount + selectedImages.length + incoming.length > 10) {
+      setError('Puedes guardar máximo 10 fotos por propiedad.');
+      return;
+    }
+    const invalid = incoming.find((file) =>
+      !['image/jpeg', 'image/png', 'image/webp'].includes(file.type) || file.size > 5 * 1024 * 1024
+    );
+    if (invalid) {
+      setError('Usa imágenes JPG, PNG o WEBP de máximo 5 MB cada una.');
+      return;
+    }
+    setError('');
+    setSelectedImages((current) => [...current, ...incoming]);
   }
 
   async function deleteProperty(property: Propiedad) {
@@ -136,6 +164,12 @@ export default function PropiedadesList() {
         <Field label="Título de la publicación"><input className="text-input" minLength={5} maxLength={255} required value={form.titulo} onChange={(e) => updateForm('titulo', e.target.value)} placeholder="Ej. Apartamento iluminado cerca a Laureles" /></Field>
         <Field label="Descripción"><textarea className="text-input textarea-input" maxLength={5000} value={form.descripcion} onChange={(e) => updateForm('descripcion', e.target.value)} placeholder="Describe los espacios, ventajas y detalles del inmueble..." rows={3} /></Field>
         <div className="form-grid-two"><Field label="Precio mensual (COP)"><input className="text-input" type="number" min="0" step="1000" required value={form.precio_mensual} onChange={(e) => updateForm('precio_mensual', e.target.value)} placeholder="2500000" /></Field><Field label="Dirección"><input className="text-input" minLength={5} maxLength={500} required value={form.direccion} onChange={(e) => updateForm('direccion', e.target.value)} placeholder="Calle 10 # 40-20" /></Field></div>
+        <div className="form-section-title">Fotografías del inmueble</div>
+        <Field label="Selecciona hasta 10 imágenes" hint="Formatos JPG, PNG o WEBP. Máximo 5 MB por fotografía.">
+          <input className="text-input" type="file" accept="image/jpeg,image/png,image/webp" multiple onChange={(event) => { selectPropertyImages(event.target.files); event.currentTarget.value = ''; }} />
+        </Field>
+        {modal === 'edit' && selected?.imagenes?.length ? <div className="property-photo-preview-grid">{selected.imagenes.map((image) => <div className="property-photo-preview" key={image.id}><img src={image.url} alt="Fotografía del inmueble" /><button type="button" onClick={async () => { try { const images = await propertiesApi.deleteImage(selected.id, image.id); setSelected({ ...selected, imagenes: images }); setItems((current) => current.map((item) => item.id === selected.id ? { ...item, imagenes: images } : item)); } catch (err) { setError(getApiError(err, 'No fue posible eliminar la fotografía.')); } }}>Quitar</button></div>)}</div> : null}
+        {imagePreviews.length > 0 && <div className="property-photo-preview-grid">{imagePreviews.map((url, index) => <div className="property-photo-preview" key={url}><img src={url} alt={selectedImages[index]?.name || 'Nueva fotografía'} /><button type="button" onClick={() => setSelectedImages((current) => current.filter((_, i) => i !== index))}>Quitar</button></div>)}</div>}
         <div className="form-section-title">Características del inmueble</div>
         <div className="form-grid-three"><Field label="Tipo"><select className="text-input" value={form.tipo} onChange={(e) => updateForm('tipo', e.target.value)}><option value="apartamento">Apartamento</option><option value="casa">Casa</option><option value="habitacion">Habitación</option><option value="finca">Finca</option></select></Field><Field label="Estrato"><select className="text-input" value={form.estrato} onChange={(e) => updateForm('estrato', e.target.value)}>{[1,2,3,4,5,6].map((v) => <option key={v} value={v}>{v}</option>)}</select></Field><Field label="Barrio"><select className="text-input" value={form.barrio_id} onChange={(e) => updateForm('barrio_id', e.target.value)}><option value="">Sin especificar</option>{barrios.map((b) => <option key={b.id} value={b.id}>{b.nombre} · {b.comuna}</option>)}</select></Field></div>
         <div className="form-grid-three"><Field label="Habitaciones"><input className="text-input" type="number" min="0" max="50" value={form.habitaciones} onChange={(e) => updateForm('habitaciones', e.target.value)} /></Field><Field label="Baños"><input className="text-input" type="number" min="0" max="50" value={form.banos} onChange={(e) => updateForm('banos', e.target.value)} /></Field><Field label="Área (m²)"><input className="text-input" type="number" min="1" step="0.1" value={form.area_m2} onChange={(e) => updateForm('area_m2', e.target.value)} placeholder="Opcional" /></Field></div>
@@ -151,6 +185,7 @@ export default function PropiedadesList() {
         {error && <Alert>{error}</Alert>}
         <div className="property-detail-heading"><div><span className="eyebrow">{selected.barrio?.nombre || 'MEDELLÍN'}</span><h3>{selected.titulo}</h3><p>{selected.direccion}</p></div><StatusBadge value={selected.estado} /></div>
         <div className="property-detail-price">{money(selected.precio_mensual)} <small>canon mensual</small></div>
+        {selected.imagenes?.length > 0 && <div className="property-detail-gallery">{selected.imagenes.map((image) => <img key={image.id} src={image.url} alt={`Fotografía de ${selected.titulo}`} loading="lazy" />)}</div>}
         {selected.descripcion && <p className="property-detail-description">{selected.descripcion}</p>}
         <div className="property-detail-specs"><div><BedDouble size={17} /><strong>{selected.habitaciones}</strong><span>Habitaciones</span></div><div><Bath size={17} /><strong>{selected.banos}</strong><span>Baños</span></div><div><Ruler size={17} /><strong>{selected.area_m2 ? `${selected.area_m2} m²` : 'No reportada'}</strong><span>Área</span></div><div><Building2 size={17} /><strong>{selected.estrato}</strong><span>Estrato</span></div></div>
         <div className="property-detail-meta"><span>Tipo: <strong>{selected.tipo}</strong></span><span>Comuna: <strong>{selected.barrio?.comuna || 'No especificada'}</strong></span><span>Zona: <strong>{selected.barrio?.zona || 'No especificada'}</strong></span></div>

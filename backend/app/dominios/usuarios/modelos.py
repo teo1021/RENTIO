@@ -22,13 +22,13 @@ class Usuario(db.Model):
         nullable=False,
         default="arrendatario",
     )
+    roles = db.Column(db.JSON, nullable=False, default=list)
     fecha_creacion = db.Column(
         db.DateTime,
         nullable=False,
         default=lambda: datetime.now(timezone.utc),
     )
 
-    # ── Relaciones ──────────────────────────────────────────────────────
     perfil = db.relationship(
         "PerfilUsuario",
         back_populates="usuario",
@@ -46,12 +46,13 @@ class Usuario(db.Model):
         lazy="dynamic",
     )
 
-    def to_dict(self):
-        """Serializa el usuario a diccionario (sin contraseña)."""
+    def to_dict(self, rol_activo=None):
+        """Serializa el usuario sin exponer su contraseña."""
         resultado = {
             "id": self.id,
             "correo": self.correo,
-            "rol": self.rol,
+            "rol": rol_activo or self.rol,
+            "roles": self.roles or [self.rol],
             "fecha_creacion": self.fecha_creacion.isoformat() if self.fecha_creacion else None,
         }
         if self.perfil:
@@ -80,11 +81,9 @@ class PerfilUsuario(db.Model):
         nullable=False,
     )
 
-    # ── Relaciones ──────────────────────────────────────────────────────
     usuario = db.relationship("Usuario", back_populates="perfil")
 
     def to_dict(self):
-        """Serializa el perfil a diccionario."""
         return {
             "id": self.id,
             "nombre": self.nombre,
