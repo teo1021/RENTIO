@@ -161,8 +161,8 @@ function ResultContent({ result }: { result: Record<string, unknown> }) {
     {typeof propertyType === 'string' && <p><strong>Tipo de inmueble:</strong> {propertyType}</p>}
     {typeof predominantStratum === 'number' && <p><strong>Estrato predominante:</strong> {predominantStratum}</p>}
     {points.length > 0 && <ul>{points.map((point, index) => <li key={index}>{String(point)}</li>)}</ul>}
-    {result.metadatos_calculo && typeof result.metadatos_calculo === 'object' && <details className="metadata-details"><summary>Ver metodología y datos utilizados</summary><pre>{JSON.stringify(result.metadatos_calculo, null, 2)}</pre></details>}
-    {result.zona && <p><strong>Zona analizada:</strong> {String(result.zona)}</p>}
+    {Boolean(result.metadatos_calculo) && typeof result.metadatos_calculo === 'object' && <details className="metadata-details"><summary>Ver metodología y datos utilizados</summary><pre>{JSON.stringify(result.metadatos_calculo, null, 2)}</pre></details>}
+    {Boolean(result.zona) && <p><strong>Zona analizada:</strong> {String(result.zona)}</p>}
     {result.tiempo_promedio_vacancia_dias !== undefined && <p><strong>Vacancia promedio:</strong> {String(result.tiempo_promedio_vacancia_dias)} días</p>}
   </div>;
 }
