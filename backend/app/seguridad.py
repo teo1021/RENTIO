@@ -67,7 +67,7 @@ def requiere_propietario(f):
         if error:
             return error
         roles = payload.get("roles", [payload.get("rol")])
-        if payload.get("rol") != "propietario" or "propietario" not in roles:
+        if payload.get("rol") != "admin" and (payload.get("rol") != "propietario" or "propietario" not in roles):
             return (jsonify({"success": False, "error": {"message": "Cambia al modo propietario para realizar esta acción."}}), 403)
         kwargs["usuario_id"] = payload["usuario_id"]
         return f(*args, **kwargs)

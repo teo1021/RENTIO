@@ -84,8 +84,13 @@ class UsuarioServicio:
         if usuario.contrasena != hash_ingresado:
             raise CredencialesInvalidasError("Correo o contraseña incorrectos.")
 
-        if not usuario.roles:
-            usuario.roles = ["admin"] if usuario.rol == "admin" else ["arrendatario", "propietario"]
+        if usuario.rol == "admin":
+            # Una cuenta administrativa no hereda permisos de los modos normales.
+            if usuario.roles != ["admin"]:
+                usuario.roles = ["admin"]
+                UsuarioRepositorio.guardar(usuario)
+        elif not usuario.roles:
+            usuario.roles = ["arrendatario", "propietario"]
             UsuarioRepositorio.guardar(usuario)
 
         return {
