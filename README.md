@@ -2,21 +2,22 @@
 
 El repositorio contiene la API principal de RENTIO (Flask), PostgreSQL y un servicio independiente de IA de marketing (FastAPI). El servicio de IA conversa con el propietario para recopilar los datos del inmueble, pregunta por los campos faltantes y genera una descripción y una referencia de canon. No implementa predicción de riesgo de inquilinos.
 
-## Inicio local con Docker
+## Inicio local con Docker y PostgreSQL de pgAdmin
 
-1. Copia `.env.example` a `.env` y reemplaza los secretos locales antes de compartir o desplegar el proyecto.
-2. Ejecuta `docker compose up --build` desde la raíz del repositorio.
-3. PostgreSQL inicializa su volumen vacío con `backend/sql/create_database.sql`. La API principal queda en `http://localhost:5000`; el servicio de IA en `http://localhost:5001` y su salud en `/health`.
-4. Para detener los contenedores conserva la base con `docker compose down`. Para borrar también la base y su volumen usa `docker compose down -v`.
+1. Copia `backend/.env.example` a `backend/.env` y `ai_service/.env.example` a `ai_service/.env`.
+2. Configura en `backend/.env` las credenciales de la base PostgreSQL que ya usas desde pgAdmin. Configura `AI_INTERNAL_API_KEY` y `INTERNAL_API_KEY` con el mismo valor en ambos archivos.
+3. Asegúrate de que PostgreSQL acepte conexiones desde Docker Desktop. El backend del contenedor usa `host.docker.internal` para llegar al servidor PostgreSQL de Windows.
+4. Ejecuta `docker compose up --build` desde la raíz del repositorio. Compose inicia dos contenedores: la API principal en `http://localhost:5000` y el servicio de IA en `http://localhost:5001` (salud en `/health`).
+5. Para detener los contenedores sin afectar la base existente, usa `docker compose down`.
 
-El script de inicialización solo se ejecuta cuando PostgreSQL crea un volumen nuevo. Si cambias el SQL, para recrear la base local elimina el volumen con `docker compose down -v` y vuelve a iniciar el stack.
+PostgreSQL permanece instalado y administrado en Windows; no se crea un contenedor ni un volumen de base de datos. El frontend también se ejecuta aparte con Vite.
 
 ## Base de datos
 
 - Script desde cero: [`backend/sql/create_database.sql`](backend/sql/create_database.sql).
 - El SQL crea tablas del backend principal y el esquema `ia_marketing` para conversaciones, mensajes y resultados.
-- En instalaciones nuevas ejecuta el script sobre una base vacía. Con Docker Compose se ejecuta automáticamente.
-- Sin Docker, crea primero la base vacía con `python scripts/create_db.py` desde `backend` y después aplica `psql -h localhost -p 5433 -U <usuario> -d <base> -f sql/create_database.sql`.
+- En instalaciones nuevas ejecuta el script sobre una base vacía. Docker Compose no lo ejecuta porque usa el PostgreSQL existente.
+- Para una base nueva, crea primero la base vacía en PostgreSQL y después aplica `backend/sql/create_database.sql` desde pgAdmin o, desde la raíz del repositorio, con `psql -h localhost -p 5432 -U <usuario> -d <base> -f backend/sql/create_database.sql`.
 - En una base ya existente con las tablas principales, `flask db upgrade` aplica la migración del esquema de IA. Si se creó desde el script completo y se va a usar Alembic para cambios futuros, ejecuta una vez `flask --app app.py db stamp head` desde `backend`.
 
 ## API del chat
