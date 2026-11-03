@@ -39,6 +39,7 @@ def crear_app(config_class=None):
         app.config.from_object(config_class)
 
     # ── Extensiones ──────────────────────────────────────────────────────
+    app.config.setdefault('MAX_CONTENT_LENGTH', 55 * 1024 * 1024)
     db.init_app(app)
     migrate.init_app(app, db)
     CORS(

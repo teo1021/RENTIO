@@ -5,6 +5,7 @@ import {
   UserRound, Settings2, ChevronDown, ArrowUpRight,
 } from 'lucide-react';
 import { useAuthStore } from '../store/authStore';
+import { authApi } from '../api/services';
 import { fullName, initials } from '../lib/format';
 import type { Rol } from '../types';
 
@@ -22,10 +23,26 @@ const roleLabels: Record<Rol, string> = { propietario: 'Propietario', arrendatar
 export default function DashboardLayout() {
   const user = useAuthStore((state) => state.user);
   const logout = useAuthStore((state) => state.logout);
+  const switchSession = useAuthStore((state) => state.switchSession);
   const navigate = useNavigate();
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const [profileOpen, setProfileOpen] = useState(false);
+  const [switchingRole, setSwitchingRole] = useState(false);
+  const availableRoles = user?.roles || [user?.rol];
+  const canSwitchRole = availableRoles.includes('arrendatario') && availableRoles.includes('propietario');
+  async function changeRole(role: 'arrendatario' | 'propietario') {
+    if (!user || role === user.rol || switchingRole) return;
+    setSwitchingRole(true);
+    try {
+      const session = await authApi.switchRole(role);
+      switchSession(session.usuario, session.token);
+      setProfileOpen(false);
+      navigate('/dashboard', { replace: true });
+    } catch (error) {
+      console.error('No fue posible cambiar el modo de RENTIO.', error);
+    } finally { setSwitchingRole(false); }
+  }
   const navigation = useMemo(() => allNavigation.filter((item) => user && item.roles.includes(user.rol)), [user]);
   const current = navigation.find((item) => location.pathname === item.path);
   const name = fullName(user);
@@ -52,7 +69,7 @@ export default function DashboardLayout() {
     <div className="workspace">
       <header className="topbar">
         <div className="topbar-left"><button className="mobile-menu-button" onClick={() => setMobileOpen(true)} aria-label="Abrir menú"><Menu size={21} /></button><div className="breadcrumb"><span>RENTIO</span><span className="breadcrumb-separator">/</span><strong>{current?.label || (location.pathname === '/perfil' ? 'Mi perfil' : 'Panel')}</strong></div></div>
-        <div className="topbar-actions"><span className="topbar-date">Medellín, Colombia</span><div className="profile-menu-wrap"><button className="topbar-profile" onClick={() => setProfileOpen((open) => !open)}><div className="avatar avatar-small">{initials(name)}</div><span>{name}</span><ChevronDown size={15} /></button>{profileOpen && <div className="profile-dropdown"><button onClick={() => { setProfileOpen(false); navigate('/perfil'); }}><UserRound size={16} /> Mi perfil</button><button onClick={signOut}><LogOut size={16} /> Cerrar sesión</button></div>}</div></div>
+        <div className="topbar-actions"><span className="topbar-date">Medellín, Colombia</span><div className="profile-menu-wrap"><button className="topbar-profile" onClick={() => setProfileOpen((open) => !open)}><div className="avatar avatar-small">{initials(name)}</div><span>{name}</span><ChevronDown size={15} /></button>{profileOpen && <div className="profile-dropdown">{canSwitchRole && <><button disabled={switchingRole} onClick={() => changeRole(user?.rol === 'propietario' ? 'arrendatario' : 'propietario')}><Building2 size={16} /> {switchingRole ? 'Cambiando...' : user?.rol === 'propietario' ? 'Cambiar a arrendatario' : 'Cambiar a propietario'}</button><div className="profile-dropdown-divider" /></>}<button onClick={() => { setProfileOpen(false); navigate('/perfil'); }}><UserRound size={16} /> Mi perfil</button><button onClick={signOut}><LogOut size={16} /> Cerrar sesión</button></div>}</div></div>
       </header>
       <main className="main-content"><div className="content-inner"><Outlet /></div><footer className="app-footer"><span>© {new Date().getFullYear()} RENTIO</span><span>Gestión de arriendos · Medellín</span></footer></main>
     </div>

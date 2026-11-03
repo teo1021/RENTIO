@@ -18,7 +18,7 @@ from app.dominios.propiedades.dtos import (
     FiltroPropiedadDTO,
 )
 from app.dominios.propiedades.modelos import ImagenPropiedad
-from app.dominios.propiedades.repositorios import ImagenPropiedadRepositorio, PropiedadRepositorio
+from app.dominios.propiedades.repositorios import PropiedadRepositorio
 from app.seguridad import requiere_propietario, requiere_token
 
 servicio = None
@@ -143,11 +143,13 @@ def subir_imagenes(id, usuario_id=None):
 
     carpeta = Path(current_app.root_path) / "static" / "uploads" / "propiedades" / str(id)
     carpeta.mkdir(parents=True, exist_ok=True)
+    archivos_guardados = []
     try:
         for archivo, extension in validaciones:
             nombre = f"{uuid.uuid4().hex}{extension}"
             destino = carpeta / nombre
             archivo.save(destino)
+            archivos_guardados.append(destino)
             url = request.host_url.rstrip("/") + url_for("static", filename=f"uploads/propiedades/{id}/{nombre}")
             imagen = ImagenPropiedad(url=url, orden=len(propiedad.imagenes))
             imagen.propiedad_id = id
@@ -155,9 +157,8 @@ def subir_imagenes(id, usuario_id=None):
         db.session.commit()
     except Exception:
         db.session.rollback()
-        for archivo_path in carpeta.glob("*"):
-            if archivo_path.name in locals().get("nombre", ""):
-                archivo_path.unlink(missing_ok=True)
+        for archivo_path in archivos_guardados:
+            archivo_path.unlink(missing_ok=True)
         raise
 
     propiedad = PropiedadRepositorio.obtener_por_id(id)
