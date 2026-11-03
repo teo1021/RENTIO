@@ -185,6 +185,7 @@ export default function PropiedadesList() {
         {error && <Alert>{error}</Alert>}
         <div className="property-detail-heading"><div><span className="eyebrow">{selected.barrio?.nombre || 'MEDELLÍN'}</span><h3>{selected.titulo}</h3><p>{selected.direccion}</p></div><StatusBadge value={selected.estado} /></div>
         <div className="property-detail-price">{money(selected.precio_mensual)} <small>canon mensual</small></div>
+        {selected.imagenes?.length > 0 && <div className="property-detail-gallery">{selected.imagenes.map((image) => <img key={image.id} src={image.url} alt={`Fotografía de ${selected.titulo}`} loading="lazy" />)}</div>}
         {selected.descripcion && <p className="property-detail-description">{selected.descripcion}</p>}
         <div className="property-detail-specs"><div><BedDouble size={17} /><strong>{selected.habitaciones}</strong><span>Habitaciones</span></div><div><Bath size={17} /><strong>{selected.banos}</strong><span>Baños</span></div><div><Ruler size={17} /><strong>{selected.area_m2 ? `${selected.area_m2} m²` : 'No reportada'}</strong><span>Área</span></div><div><Building2 size={17} /><strong>{selected.estrato}</strong><span>Estrato</span></div></div>
         <div className="property-detail-meta"><span>Tipo: <strong>{selected.tipo}</strong></span><span>Comuna: <strong>{selected.barrio?.comuna || 'No especificada'}</strong></span><span>Zona: <strong>{selected.barrio?.zona || 'No especificada'}</strong></span></div>
