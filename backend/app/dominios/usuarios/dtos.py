@@ -22,28 +22,25 @@ class RegistroDTO(Schema):
     rol = fields.String(
         required=True,
         validate=validate.OneOf(
-            ROLES_VALIDOS, error="El rol debe ser 'arrendatario' o 'propietario'."
+            ROLES_VALIDOS, error="El rol inicial debe ser 'arrendatario' o 'propietario'."
         ),
-        error_messages={"required": "El rol es obligatorio."},
+        error_messages={"required": "El rol inicial es obligatorio."},
     )
-    nombre = fields.String(
-        load_default=None,
-        validate=validate.Length(max=100),
-    )
-    apellido = fields.String(
-        load_default=None,
-        validate=validate.Length(max=100),
-    )
+    nombre = fields.String(load_default=None, validate=validate.Length(max=100))
+    apellido = fields.String(load_default=None, validate=validate.Length(max=100))
 
 
 class LoginDTO(Schema):
     """Validación de datos para el inicio de sesión."""
 
     correo = fields.Email(required=True, error_messages={"required": "El correo es obligatorio."})
-    contrasena = fields.String(
-        required=True,
-        error_messages={"required": "La contraseña es obligatoria."},
-    )
+    contrasena = fields.String(required=True, error_messages={"required": "La contraseña es obligatoria."})
+
+
+class CambiarContextoDTO(Schema):
+    """Valida el rol al que el usuario desea cambiar dentro de su cuenta."""
+
+    rol = fields.String(required=True, validate=validate.OneOf(ROLES_VALIDOS))
 
 
 class ActualizarPerfilDTO(Schema):
@@ -57,13 +54,10 @@ class ActualizarPerfilDTO(Schema):
 
 
 class CambiarRolDTO(Schema):
-    """Validación de datos para que un admin cambie el rol de un usuario."""
+    """Validación de datos para que un admin cambie el rol administrativo de un usuario."""
 
     rol = fields.String(
         required=True,
-        validate=validate.OneOf(
-            ["arrendatario", "propietario", "admin"],
-            error="Rol inválido.",
-        ),
+        validate=validate.OneOf(["arrendatario", "propietario", "admin"], error="Rol inválido."),
         error_messages={"required": "El rol es obligatorio."},
     )
