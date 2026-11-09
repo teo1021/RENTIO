@@ -1,3 +1,4 @@
+
 """
 Servicios del dominio de propiedades.
 
@@ -11,9 +12,10 @@ from app.dominios.propiedades.modelos import Propiedad
 from app.dominios.propiedades.repositorios import PropiedadRepositorio
 from app.dominios.usuarios.repositorios import UsuarioRepositorio
 
-# ═══════════════════════════════════════════════════════════════════════════════
+
+# ============================================================================
 # Excepciones de dominio
-# ═══════════════════════════════════════════════════════════════════════════════
+# ============================================================================
 
 
 class PropiedadNoEncontradaError(Exception):
@@ -28,9 +30,9 @@ class PermisoPropiedadError(Exception):
     pass
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ============================================================================
 # Funciones auxiliares
-# ═══════════════════════════════════════════════════════════════════════════════
+# ============================================================================
 
 
 def _verificar_propiedad_y_permisos(propiedad_id, usuario_id):
@@ -45,36 +47,41 @@ def _verificar_propiedad_y_permisos(propiedad_id, usuario_id):
         PermisoPropiedadError: Si el usuario no tiene permisos.
     """
     propiedad = PropiedadRepositorio.obtener_por_id(propiedad_id)
+
     if not propiedad:
-        raise PropiedadNoEncontradaError(f"Propiedad con id {propiedad_id} no encontrada.")
+        raise PropiedadNoEncontradaError(
+            f"Propiedad con id {propiedad_id} no encontrada."
+        )
 
     usuario = UsuarioRepositorio.obtener_por_id(usuario_id)
-    if propiedad.propietario_id != usuario_id and (not usuario or usuario.rol != "admin"):
-        raise PermisoPropiedadError("No tienes permisos para modificar esta propiedad.")
+
+    if propiedad.propietario_id != usuario_id and (
+        not usuario or usuario.rol != "admin"
+    ):
+        raise PermisoPropiedadError(
+            "No tienes permisos para modificar esta propiedad."
+        )
 
     return propiedad
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
+# ============================================================================
 # Servicio
-# ═══════════════════════════════════════════════════════════════════════════════
+# ============================================================================
 
 
 class PropiedadServicio:
     """Lógica de negocio para el dominio de propiedades."""
 
     @staticmethod
-    def crear(datos, propietario_id):
+    def crear(datos, propietario_id, commit=True):
         """
         Crea una nueva propiedad asociada a un propietario.
 
-        Args:
-            datos: Diccionario validado por CrearPropiedadDTO.
-            propietario_id: ID del usuario propietario.
-
-        Returns:
-            Propiedad: La propiedad creada.
+        Permite confirmar la transacción inmediatamente o dejarla
+        pendiente para que otro proceso pueda confirmar varios cambios.
         """
+        datos = dict(datos)
         caracteristicas_ids = datos.pop("caracteristicas_ids", [])
 
         propiedad = Propiedad(
@@ -94,23 +101,12 @@ class PropiedadServicio:
         if caracteristicas_ids:
             for cid in caracteristicas_ids:
                 caract = CaracteristicaRepositorio.obtener_por_id(cid)
+
                 if caract:
                     propiedad.caracteristicas.append(caract)
 
-        PropiedadRepositorio.guardar(propiedad)
-        return propiedad
+        PropiedadRepositorio.guardar(propiedad, commit=commit)
 
-    @staticmethod
-    def obtener_por_id(propiedad_id):
-        """
-        Obtiene una propiedad por su ID.
-
-        Raises:
-            PropiedadNoEncontradaError: Si no existe.
-        """
-        propiedad = PropiedadRepositorio.obtener_por_id(propiedad_id)
-        if not propiedad:
-            raise PropiedadNoEncontradaError(f"Propiedad con id {propiedad_id} no encontrada.")
         return propiedad
 
     @staticmethod
@@ -147,8 +143,10 @@ class PropiedadServicio:
             "estado",
             "barrio_id",
         ]
+
         for campo in campos_actualizables:
             valor = datos.get(campo)
+
             if valor is not None:
                 setattr(propiedad, campo, valor)
 
@@ -182,6 +180,7 @@ class PropiedadServicio:
 
         for cid in caracteristicas_ids:
             caract = CaracteristicaRepositorio.obtener_por_id(cid)
+
             if caract:
                 propiedad.caracteristicas.append(caract)
 
