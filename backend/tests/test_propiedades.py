@@ -84,3 +84,26 @@ def test_crud_completo_propiedades(client, propietario_auth, arrendatario_auth, 
     # Verificar que ya no existe (404)
     res_get_del = client.get(f"/api/v1/propiedades/{prop_id}")
     assert res_get_del.status_code == 404
+
+
+def test_subir_imagen_propiedad(client, propietario_auth, db):
+    """Permite guardar una fotografía PNG y devolver su URL asociada al inmueble."""
+    from io import BytesIO
+    from app.dominios.propiedades.modelos import Propiedad
+
+    propiedad = Propiedad(
+        titulo="Casa con fotos", precio_mensual=1200000, direccion="Calle 10 # 20-30",
+        estrato=3, propietario_id=propietario_auth["usuario"].id,
+    )
+    db.session.add(propiedad)
+    db.session.commit()
+    # PNG de 1x1 píxel.
+    png = bytes.fromhex("89504e470d0a1a0a0000000d49484452000000010000000108060000001f15c4890000000b49444154789c636000020000050001a5f645400000000049454e44ae426082")
+    respuesta = client.post(
+        f"/api/v1/propiedades/{propiedad.id}/imagenes",
+        headers=propietario_auth["headers"],
+        data={"imagenes": (BytesIO(png), "casa.png")},
+        content_type="multipart/form-data",
+    )
+    assert respuesta.status_code == 201
+    assert len(respuesta.get_json()["data"]) == 1

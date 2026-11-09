@@ -14,32 +14,21 @@ from flask import current_app
 from app.dominios.usuarios.modelos import PerfilUsuario, Usuario
 from app.dominios.usuarios.repositorios import PerfilRepositorio, UsuarioRepositorio
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Excepciones de dominio
-# ═══════════════════════════════════════════════════════════════════════════════
-
 
 class CorreoYaRegistradoError(Exception):
-    """Se lanza cuando se intenta registrar un correo que ya existe."""
-
     pass
 
 
 class CredencialesInvalidasError(Exception):
-    """Se lanza cuando las credenciales de login son incorrectas."""
-
     pass
 
 
 class UsuarioNoEncontradoError(Exception):
-    """Se lanza cuando no se encuentra un usuario por ID."""
-
     pass
 
 
-# ═══════════════════════════════════════════════════════════════════════════════
-# Servicio
-# ═══════════════════════════════════════════════════════════════════════════════
+class RolNoDisponibleError(Exception):
+    """Se lanza cuando se intenta activar un rol que la cuenta no tiene habilitado."""
 
 
 class UsuarioServicio:
@@ -47,33 +36,34 @@ class UsuarioServicio:
 
     @staticmethod
     def _hash_contrasena(contrasena):
-        """Genera un hash SHA-256 de la contraseña."""
         return hashlib.sha256(contrasena.encode("utf-8")).hexdigest()
 
     @staticmethod
+    def _crear_token(usuario, rol_activo):
+        exp_minutos = current_app.config.get("JWT_EXP_MINUTES", 15)
+        payload = {
+            "usuario_id": usuario.id,
+            "correo": usuario.correo,
+            "rol": rol_activo,
+            "roles": usuario.roles or [usuario.rol],
+            "exp": datetime.now(timezone.utc) + timedelta(minutes=exp_minutos),
+        }
+        return jwt.encode(payload, current_app.config["SECRET_KEY"], algorithm="HS256")
+
+    @staticmethod
     def registrar(datos):
-        """
-        Registra un nuevo usuario con su perfil.
-
-        Args:
-            datos: Diccionario validado por RegistroDTO.
-
-        Returns:
-            Usuario: El usuario creado.
-
-        Raises:
-            CorreoYaRegistradoError: Si el correo ya está registrado.
-        """
         existente = UsuarioRepositorio.obtener_por_correo(datos["correo"])
         if existente:
             raise CorreoYaRegistradoError(f"El correo {datos['correo']} ya está registrado.")
 
+        # Todas las cuentas normales pueden buscar y ofrecer inmuebles.
+        # 'rol' conserva el contexto inicial elegido durante el registro.
         usuario = Usuario(
             correo=datos["correo"],
             contrasena=UsuarioServicio._hash_contrasena(datos["contrasena"]),
             rol=datos["rol"],
+            roles=["arrendatario", "propietario"],
         )
-
         UsuarioRepositorio.guardar(usuario)
 
         perfil = PerfilUsuario(
@@ -82,23 +72,10 @@ class UsuarioServicio:
             apellido=datos.get("apellido"),
         )
         PerfilRepositorio.guardar(perfil)
-
         return usuario
 
     @staticmethod
     def login(datos):
-        """
-        Autentica un usuario y genera un token JWT.
-
-        Args:
-            datos: Diccionario validado por LoginDTO.
-
-        Returns:
-            dict: Contiene 'token' y 'usuario'.
-
-        Raises:
-            CredencialesInvalidasError: Si correo o contraseña son incorrectos.
-        """
         usuario = UsuarioRepositorio.obtener_por_correo(datos["correo"])
         if not usuario:
             raise CredencialesInvalidasError("Correo o contraseña incorrectos.")
@@ -107,35 +84,37 @@ class UsuarioServicio:
         if usuario.contrasena != hash_ingresado:
             raise CredencialesInvalidasError("Correo o contraseña incorrectos.")
 
-        exp_minutos = current_app.config.get("JWT_EXP_MINUTES", 15)
-        payload = {
-            "usuario_id": usuario.id,
-            "correo": usuario.correo,
-            "rol": usuario.rol,
-            "exp": datetime.now(timezone.utc) + timedelta(minutes=exp_minutos),
-        }
-        token = jwt.encode(
-            payload,
-            current_app.config["SECRET_KEY"],
-            algorithm="HS256",
-        )
+        if usuario.rol == "admin":
+            # Una cuenta administrativa no hereda permisos de los modos normales.
+            if usuario.roles != ["admin"]:
+                usuario.roles = ["admin"]
+                UsuarioRepositorio.guardar(usuario)
+        elif not usuario.roles:
+            usuario.roles = ["arrendatario", "propietario"]
+            UsuarioRepositorio.guardar(usuario)
 
-        return {"token": token, "usuario": usuario.to_dict()}
+        return {
+            "token": UsuarioServicio._crear_token(usuario, usuario.rol),
+            "usuario": usuario.to_dict(rol_activo=usuario.rol),
+        }
+
+    @staticmethod
+    def cambiar_contexto(usuario_id, nuevo_rol):
+        usuario = UsuarioRepositorio.obtener_por_id(usuario_id)
+        if not usuario:
+            raise UsuarioNoEncontradoError(f"Usuario con id {usuario_id} no encontrado.")
+
+        roles = usuario.roles or [usuario.rol]
+        if nuevo_rol not in roles:
+            raise RolNoDisponibleError("Este rol no está habilitado para tu cuenta.")
+
+        return {
+            "token": UsuarioServicio._crear_token(usuario, nuevo_rol),
+            "usuario": usuario.to_dict(rol_activo=nuevo_rol),
+        }
 
     @staticmethod
     def obtener_perfil(usuario_id):
-        """
-        Obtiene el perfil completo de un usuario.
-
-        Args:
-            usuario_id: ID del usuario.
-
-        Returns:
-            Usuario: El usuario con su perfil.
-
-        Raises:
-            UsuarioNoEncontradoError: Si no existe el usuario.
-        """
         usuario = UsuarioRepositorio.obtener_por_id(usuario_id)
         if not usuario:
             raise UsuarioNoEncontradoError(f"Usuario con id {usuario_id} no encontrado.")
@@ -143,19 +122,6 @@ class UsuarioServicio:
 
     @staticmethod
     def actualizar_perfil(usuario_id, datos):
-        """
-        Actualiza parcialmente el perfil de un usuario.
-
-        Args:
-            usuario_id: ID del usuario.
-            datos: Diccionario validado por ActualizarPerfilDTO.
-
-        Returns:
-            Usuario: El usuario actualizado.
-
-        Raises:
-            UsuarioNoEncontradoError: Si no existe el usuario.
-        """
         usuario = UsuarioRepositorio.obtener_por_id(usuario_id)
         if not usuario:
             raise UsuarioNoEncontradoError(f"Usuario con id {usuario_id} no encontrado.")
@@ -175,28 +141,15 @@ class UsuarioServicio:
 
     @staticmethod
     def listar_usuarios():
-        """Retorna todos los usuarios (uso administrativo)."""
         return UsuarioRepositorio.obtener_todos()
 
     @staticmethod
     def cambiar_rol(usuario_id, nuevo_rol):
-        """
-        Cambia el rol de un usuario (operación administrativa).
-
-        Args:
-            usuario_id: ID del usuario a modificar.
-            nuevo_rol: Nuevo rol a asignar.
-
-        Returns:
-            Usuario: El usuario con el rol actualizado.
-
-        Raises:
-            UsuarioNoEncontradoError: Si no existe el usuario.
-        """
         usuario = UsuarioRepositorio.obtener_por_id(usuario_id)
         if not usuario:
             raise UsuarioNoEncontradoError(f"Usuario con id {usuario_id} no encontrado.")
 
         usuario.rol = nuevo_rol
+        usuario.roles = ["admin"] if nuevo_rol == "admin" else ["arrendatario", "propietario"]
         UsuarioRepositorio.guardar(usuario)
         return usuario

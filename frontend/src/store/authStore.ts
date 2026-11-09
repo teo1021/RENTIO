@@ -7,6 +7,7 @@ interface AuthState {
   isAuthenticated: boolean;
   isBootstrapping: boolean;
   login: (user: Usuario, token: string) => void;
+  switchSession: (user: Usuario, token: string) => void;
   setUser: (user: Usuario) => void;
   finishBootstrap: () => void;
   logout: () => void;
@@ -20,6 +21,10 @@ export const useAuthStore = create<AuthState>((set) => ({
   isAuthenticated: Boolean(storedToken),
   isBootstrapping: Boolean(storedToken),
   login: (user, token) => {
+    localStorage.setItem('rentio_token', token);
+    set({ user, token, isAuthenticated: true, isBootstrapping: false });
+  },
+  switchSession: (user, token) => {
     localStorage.setItem('rentio_token', token);
     set({ user, token, isAuthenticated: true, isBootstrapping: false });
   },

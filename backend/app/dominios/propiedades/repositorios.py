@@ -12,10 +12,15 @@ class PropiedadRepositorio:
     """Métodos de acceso a datos para la tabla de propiedades."""
 
     @staticmethod
-    def guardar(propiedad):
+    def guardar(propiedad, commit=True):
         """Persiste una propiedad en la base de datos."""
         db.session.add(propiedad)
-        db.session.commit()
+
+        if commit:
+            db.session.commit()
+        else:
+            db.session.flush()
+
         return propiedad
 
     @staticmethod

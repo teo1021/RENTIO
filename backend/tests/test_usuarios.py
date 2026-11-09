@@ -26,6 +26,7 @@ def test_registro_usuario_exitoso(client):
     assert datos["success"] is True
     assert datos["data"]["correo"] == payload["correo"]
     assert datos["data"]["rol"] == "arrendatario"
+    assert set(datos["data"]["roles"]) == {"arrendatario", "propietario"}
     assert "contrasena" not in datos["data"]
 
 
@@ -123,3 +124,26 @@ def test_admin_usuarios_y_cambiar_rol(client, admin_auth, arrendatario_auth):
     )
     assert patch_res.status_code == 200
     assert patch_res.get_json()["data"]["rol"] == "propietario"
+
+
+def test_cambiar_contexto_entre_roles(client, arrendatario_auth):
+    """Una misma cuenta puede activar sus dos modos sin crear otra cuenta."""
+    respuesta = client.post(
+        "/api/v1/usuarios/cambiar-contexto",
+        headers=arrendatario_auth["headers"],
+        json={"rol": "propietario"},
+    )
+    assert respuesta.status_code == 200
+    datos = respuesta.get_json()["data"]
+    assert datos["usuario"]["rol"] == "propietario"
+    assert set(datos["usuario"]["roles"]) == {"arrendatario", "propietario"}
+
+
+def test_no_permitir_contexto_no_habilitado(client, admin_auth):
+    """Una cuenta administrativa no puede cambiar a un rol normal."""
+    respuesta = client.post(
+        "/api/v1/usuarios/cambiar-contexto",
+        headers=admin_auth["headers"],
+        json={"rol": "propietario"},
+    )
+    assert respuesta.status_code == 403
