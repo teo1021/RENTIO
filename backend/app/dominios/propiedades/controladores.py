@@ -85,8 +85,19 @@ def mis_propiedades(usuario_id=None):
 @propiedades_bp.route("/<int:id>", methods=["GET"])
 def obtener(id):
     propiedad = servicio.obtener_por_id(id)
-    return jsonify({"success": True, "message": "Propiedad obtenida con éxito.", "data": propiedad.to_dict()}), 200
 
+    if propiedad is None:
+        return jsonify({
+            "success": False,
+            "message": "Propiedad no encontrada.",
+            "data": None
+        }), 404
+
+    return jsonify({
+        "success": True,
+        "message": "Propiedad obtenida con ?xito.",
+        "data": propiedad.to_dict()
+    }), 200
 
 @propiedades_bp.route("/<int:id>", methods=["PATCH"])
 @requiere_propietario

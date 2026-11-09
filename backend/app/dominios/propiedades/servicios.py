@@ -110,6 +110,11 @@ class PropiedadServicio:
         return propiedad
 
     @staticmethod
+    def obtener_por_id(propiedad_id):
+        """Obtiene una propiedad por su identificador."""
+        return PropiedadRepositorio.obtener_por_id(propiedad_id)
+
+    @staticmethod
     def listar(filtros=None):
         """Lista propiedades con filtros opcionales."""
         return PropiedadRepositorio.obtener_todos(filtros)
