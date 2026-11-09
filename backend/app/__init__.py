@@ -39,7 +39,6 @@ def crear_app(config_class=None):
         app.config.from_object(config_class)
 
     # ── Extensiones ──────────────────────────────────────────────────────
-    app.config.setdefault('MAX_CONTENT_LENGTH', 55 * 1024 * 1024)
     db.init_app(app)
     migrate.init_app(app, db)
     CORS(
@@ -84,7 +83,6 @@ def crear_app(config_class=None):
         CorreoYaRegistradoError,
         CredencialesInvalidasError,
         UsuarioNoEncontradoError,
-        RolNoDisponibleError,
         UsuarioServicio,
     )
 
@@ -141,7 +139,6 @@ def crear_app(config_class=None):
     # 403 Forbidden
     app.register_error_handler(PermisoPropiedadError, _crear_error_handler(403))
     app.register_error_handler(PermisoArriendoError, _crear_error_handler(403))
-    app.register_error_handler(RolNoDisponibleError, _crear_error_handler(403))
 
     # 404 Not Found
     app.register_error_handler(UsuarioNoEncontradoError, _crear_error_handler(404))

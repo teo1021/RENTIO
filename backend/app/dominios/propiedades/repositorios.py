@@ -1,7 +1,7 @@
 """
 Repositorio del dominio de propiedades.
 
-Capa de acceso a datos para propiedades e imágenes.
+Capa de acceso a datos para propiedades e imÃ¡genes.
 """
 
 from app import db
@@ -9,7 +9,7 @@ from app.dominios.propiedades.modelos import ImagenPropiedad, Propiedad
 
 
 class PropiedadRepositorio:
-    """Métodos de acceso a datos para la tabla de propiedades."""
+    """MÃ©todos de acceso a datos para la tabla de propiedades."""
 
     @staticmethod
     def guardar(propiedad, commit=True):
@@ -18,10 +18,9 @@ class PropiedadRepositorio:
 
         if commit:
             db.session.commit()
-        else:
-            db.session.flush()
 
         return propiedad
+
 
     @staticmethod
     def obtener_por_id(propiedad_id):
@@ -79,7 +78,7 @@ class PropiedadRepositorio:
 
 
 class ImagenPropiedadRepositorio:
-    """Métodos de acceso a datos para la tabla de imágenes de propiedad."""
+    """MÃ©todos de acceso a datos para la tabla de imÃ¡genes de propiedad."""
 
     @staticmethod
     def guardar(imagen):
@@ -90,6 +89,6 @@ class ImagenPropiedadRepositorio:
 
     @staticmethod
     def eliminar_por_propiedad(propiedad_id):
-        """Elimina todas las imágenes de una propiedad."""
+        """Elimina todas las imÃ¡genes de una propiedad."""
         ImagenPropiedad.query.filter_by(propiedad_id=propiedad_id).delete()
         db.session.commit()

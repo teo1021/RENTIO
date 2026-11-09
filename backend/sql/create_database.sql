@@ -12,7 +12,6 @@ CREATE TABLE usuarios (
     correo VARCHAR(255) NOT NULL UNIQUE,
     contrasena VARCHAR(255) NOT NULL,
     rol rol_usuario NOT NULL DEFAULT 'arrendatario',
-    roles JSON NOT NULL DEFAULT '[]',
     fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
 CREATE INDEX ix_usuarios_correo ON usuarios(correo);

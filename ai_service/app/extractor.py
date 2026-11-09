@@ -1,6 +1,6 @@
-﻿
+
 """
-Extractor de entidades y gestor de dialogo para la recopilacion de datos de inmuebles.
+Extractor de entidades y gestor de diálogo para la recopilación de datos de inmuebles.
 """
 
 import json
@@ -28,13 +28,13 @@ PALABRAS_A_NUMEROS = {
 
 
 AMENIDADES_CATALOGO = [
-    ("balcon", "BalcÃ³n"),
-    ("balcones", "BalcÃ³n"),
+    ("balcon", "Balcón"),
+    ("balcones", "Balcón"),
     ("piscina", "Piscina"),
     ("ascensor", "Ascensor"),
     ("ascensores", "Ascensor"),
     ("vigilancia", "Vigilancia 24/7"),
-    ("porteria", "PorterÃ­a 24/7"),
+    ("porteria", "Portería 24/7"),
     ("seguridad", "Seguridad privada"),
     ("gimnasio", "Gimnasio"),
     ("zona infantil", "Zona infantil"),
@@ -43,7 +43,7 @@ AMENIDADES_CATALOGO = [
     ("gas natural", "Red de gas natural"),
     ("calentador", "Calentador de agua"),
     ("terraza", "Terraza"),
-    ("vista panoramica", "Vista panorÃ¡mica"),
+    ("vista panoramica", "Vista panorámica"),
     ("vista a la ciudad", "Vista a la ciudad"),
     ("patio", "Patio"),
     ("zona de ropas", "Zona de ropas"),
@@ -51,8 +51,8 @@ AMENIDADES_CATALOGO = [
     ("vestier", "Vestier"),
     ("jacuzzi", "Jacuzzi"),
     ("sauna", "Sauna / Turco"),
-    ("salon comunal", "SalÃ³n social"),
-    ("salon social", "SalÃ³n social"),
+    ("salon comunal", "Salón social"),
+    ("salon social", "Salón social"),
     ("cancha", "Cancha deportiva"),
     ("zonas verdes", "Zonas verdes"),
     ("parqueadero visitantes", "Parqueadero de visitantes"),
@@ -60,7 +60,7 @@ AMENIDADES_CATALOGO = [
 
 
 def normalizar_texto(texto: str) -> str:
-    """Quita acentos y pasa el texto a minusculas."""
+    """Quita acentos y pasa el texto a minúsculas."""
     if not texto:
         return ""
 
@@ -79,28 +79,26 @@ class ExtractorInmueble:
     def extraer(
         self,
         texto: str,
-        datos_previos: Optional[Dict[str, Any]] = None
+        datos_previos: Optional[Dict[str, Any]] = None,
+        historial: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
+        """Extrae características del mensaje actual."""
 
         extraidos: Dict[str, Any] = {}
+        datos_previos = datos_previos or {}
+        historial = historial or []
         t_norm = normalizar_texto(texto)
 
-        # Extraccion mediante el modelo de IA, si esta configurado.
+        # El modelo solo extrae información declarada explícitamente.
         extraidos.update(
-            self._extraer_con_modelo(texto, datos_previos or {})
+            self._extraer_con_modelo(texto, datos_previos, historial)
         )
 
-        # 1. Direccion del inmueble.
-        direccion = self._extraer_direccion(texto)
-
-        if direccion:
-            extraidos["direccion"] = direccion
-
-        # 2. Tipo de inmueble.
+        # 1. Tipo de inmueble
         if "apartaestudio" in t_norm:
             extraidos["tipo"] = "apartamento"
 
-            if "habitaciones" not in (datos_previos or {}):
+            if "habitaciones" not in datos_previos:
                 extraidos["habitaciones"] = 1
 
         elif "apartamento" in t_norm or "apto" in t_norm:
@@ -119,11 +117,12 @@ class ExtractorInmueble:
         elif "finca" in t_norm:
             extraidos["tipo"] = "finca"
 
-        # 3. Habitaciones.
+        # 2. Habitaciones
         patron_hab = re.search(
-            r"(\b\d+\b|un|uno|una|dos|tres|cuatro|cinco|"
-            r"seis|siete|ocho|nueve|diez)\s*"
-            r"(?:habitaciones?|alcobas?|cuartos?|dormitorios?|piezas?)",
+            r"(\b\d+\b|un|uno|una|dos|tres|cuatro|cinco|seis|"
+            r"siete|ocho|nueve|diez)\s*"
+            r"(?:habitacion(?:es)?|alcoba(?:s)?|cuarto(?:s)?|"
+            r"dormitorio(?:s)?|pieza(?:s)?)",
             t_norm,
         )
 
@@ -137,10 +136,10 @@ class ExtractorInmueble:
         elif "monoambiente" in t_norm or "apartaestudio" in t_norm:
             extraidos["habitaciones"] = 1
 
-        # 4. BaÃ±os.
+        # 3. Baños
         patron_banos = re.search(
             r"(\b\d+\b|un|uno|una|dos|tres|cuatro|cinco|seis)\s*"
-            r"banos?",
+            r"(?:banos?)",
             t_norm,
         )
 
@@ -151,19 +150,19 @@ class ExtractorInmueble:
                 int(valor) if valor.isdigit() else 1
             )
 
-        # 5. Estrato.
+        # 4. Estrato
         patron_estrato = re.search(
-            r"estrato\s*([1-6])\b",
-            t_norm
+            r"estrato\s*(?:numero\s*)?([1-6])\b",
+            t_norm,
         )
 
         if patron_estrato:
             extraidos["estrato"] = int(patron_estrato.group(1))
 
-        # 6. Area en metros cuadrados.
+        # 5. Área en metros cuadrados
         patron_area = re.search(
             r"(\d+(?:[.,]\d+)?)\s*"
-            r"(?:m2|metros(?: cuadrados)?|mÂ²|mts2|mts)\b",
+            r"(?:m2|metros(?:\s+cuadrados)?|mts2|mts)\b",
             t_norm,
         )
 
@@ -175,10 +174,22 @@ class ExtractorInmueble:
             if 10 <= area_valor <= 1000:
                 extraidos["area_m2"] = area_valor
 
-        # 7. Parqueadero.
+        precio = self._extraer_precio(texto)
+        if precio is not None:
+            extraidos["precio_mensual"] = precio
+
+        respuesta_contextual = self._extraer_respuesta_contextual(
+            texto,
+            historial,
+        )
+        for campo, valor in respuesta_contextual.items():
+            extraidos.setdefault(campo, valor)
+
+        # 6. Parqueadero
         if re.search(
-            r"(sin|no\s+tiene)\s+(parqueadero|garaje|cochera)",
-            t_norm
+            r"(sin|no\s+tiene|no\s+cuenta\s+con)\s+"
+            r"(parqueadero|garaje|cochera)",
+            t_norm,
         ):
             extraidos["parqueadero"] = False
 
@@ -186,23 +197,30 @@ class ExtractorInmueble:
             r"(con\s+parqueadero|incluye\s+parqueadero|"
             r"tiene\s+parqueadero|parqueadero\s+privado|"
             r"garaje|parqueadero)",
-            t_norm
+            t_norm,
         ):
             extraidos["parqueadero"] = True
 
-        # 8. Barrio.
+        # 7. Dirección exacta
+        direccion = self._extraer_direccion(texto)
+
+        if direccion:
+            extraidos["direccion"] = direccion
+
+        # 8. Barrio
         barrio_encontrado = None
 
         if self.recomendador:
             patron_en = re.findall(
                 r"(?:en|barrio|sector|ubicado en|zona)\s+"
-                r"([a-z\s]{3,30})",
-                t_norm
+                r"([a-záéíóúñ\s]{3,30})",
+                texto.lower(),
             )
 
             for candidato in patron_en:
                 candidato_limpio = (
-                    candidato.split(",")[0]
+                    normalizar_texto(candidato)
+                    .split(",")[0]
                     .split(".")[0]
                     .strip()
                 )
@@ -266,7 +284,7 @@ class ExtractorInmueble:
         if barrio_encontrado:
             extraidos["barrio"] = barrio_encontrado
 
-        # 9. Caracteristicas y amenidades.
+        # 9. Características y amenidades
         caracteristicas_detectadas = []
 
         for palabra, nombre_formal in AMENIDADES_CATALOGO:
@@ -284,44 +302,57 @@ class ExtractorInmueble:
 
     @staticmethod
     def _extraer_direccion(texto: str) -> Optional[str]:
-        """Busca direcciones inmobiliarias escritas por el usuario."""
+        """
+        Extrae una dirección cuando el usuario la identifica explícitamente.
+        No intenta inventar una dirección a partir del barrio.
+        """
 
-        patron = re.search(
-            r"\b(?:direcci[oó]n|ubicaci[oó]n exacta|nomenclatura)\s*"
-            r"(?:es|:|-)?\s*"
-            r"((?:calle|cl|carrera|cra|cr|avenida|av|"
-            r"transversal|tv|diagonal|dg)\s*"
-            r"[\w\s#.-]{2,35})",
+        patron_etiqueta = re.search(
+            r"(?:direccion|ubicacion exacta|nomenclatura)"
+            r"\s*(?:del inmueble)?\s*(?:es|:|=)?\s*(.+)",
             texto,
-            re.IGNORECASE
+            flags=re.IGNORECASE,
         )
 
-        if not patron:
-            return None
+        if patron_etiqueta:
+            direccion = patron_etiqueta.group(1).strip()
 
-        direccion = patron.group(1)
+            direccion = re.sub(
+                r"[,;]?\s*(?:barrio|sector|estrato)\s+.*$",
+                "",
+                direccion,
+                flags=re.IGNORECASE,
+            ).strip()
 
-        # Evitar que la direccion capture otros datos del mensaje.
-        direccion = re.split(
-            r"[,;\n]|\b(?:estrato|barrio|habitaciones?|"
-            r"alcobas?|banos?|area|metros|con|sin)\b",
-            direccion,
-            flags=re.IGNORECASE
-        )[0]
+            direccion = direccion.strip(" .,:;-")
 
-        direccion = direccion.strip(" .,:;-")
+            if len(direccion) >= 5:
+                return direccion[:500]
 
-        # Una direccion debe contener al menos un numero.
-        if not re.search(r"\d", direccion):
-            return None
+        # También reconoce nomenclaturas escritas directamente,
+        # por ejemplo: Cra 45 # 12-30 o Calle 10 # 20-15.
+        patron_nomenclatura = re.search(
+            r"\b(?:calle|carrera|cra|cr|avenida|av|diagonal|diag|"
+            r"transversal|tv)\.?\s*"
+            r"\d+[a-zA-Z]?"
+            r"(?:\s*#\s*\d+[a-zA-Z]?)?"
+            r"(?:\s*-\s*\d+[a-zA-Z]?)?",
+            texto,
+            flags=re.IGNORECASE,
+        )
 
-        return direccion
+        if patron_nomenclatura:
+            return patron_nomenclatura.group(0).strip()[:500]
+
+        return None
 
     @staticmethod
     def _extraer_con_modelo(
         texto: str,
-        datos_previos: Dict[str, Any]
+        datos_previos: Dict[str, Any],
+        historial: Optional[List[Dict[str, Any]]] = None,
     ) -> Dict[str, Any]:
+        """Usa el modelo únicamente para extraer datos explícitos."""
 
         if settings.AI_PROVIDER != "openai" or not settings.AI_API_KEY:
             return {}
@@ -339,16 +370,18 @@ class ExtractorInmueble:
                     {
                         "role": "system",
                         "content": (
-                            "Extrae unicamente caracteristicas inmobiliarias "
-                            "que el usuario haya dicho explicitamente. "
+                            "Extrae únicamente características inmobiliarias "
+                            "que el usuario haya dicho explícitamente. "
                             "No infieras ni completes valores desconocidos. "
-                            "Devuelve JSON con las claves tipo, barrio, "
-                            "habitaciones, banos, area_m2, estrato, "
+                            "Devuelve un JSON con las claves: tipo, barrio, "
+                            "habitaciones, banos, area_m2, estrato, precio_mensual, "
                             "direccion, parqueadero y caracteristicas. "
                             "Omite las claves no mencionadas. "
-                            "tipo debe ser casa, apartamento, habitacion o finca. "
-                            "La direccion debe conservar la nomenclatura "
-                            "escrita por el usuario."
+                            "La dirección debe ser la nomenclatura exacta "
+                            "si el usuario la proporciona. "
+                            "No confundas el barrio con la dirección. "
+                            "tipo debe ser casa, apartamento, habitacion "
+                            "o finca."
                         ),
                     },
                     {
@@ -356,15 +389,16 @@ class ExtractorInmueble:
                         "content": json.dumps(
                             {
                                 "mensaje": texto,
-                                "datos_previos": datos_previos
+                                "datos_previos": datos_previos,
+                                "historial": historial or [],
                             },
-                            ensure_ascii=False
+                            ensure_ascii=False,
                         ),
                     },
                 ],
             )
 
-            datos = json.loads(
+            data = json.loads(
                 respuesta.choices[0].message.content or "{}"
             )
 
@@ -375,6 +409,7 @@ class ExtractorInmueble:
                 "banos",
                 "area_m2",
                 "estrato",
+                "precio_mensual",
                 "direccion",
                 "parqueadero",
                 "caracteristicas",
@@ -382,18 +417,145 @@ class ExtractorInmueble:
 
             return {
                 clave: valor
-                for clave, valor in datos.items()
+                for clave, valor in data.items()
                 if clave in permitidos and valor is not None
             }
 
-        except Exception:
+        except Exception as exc:
+            raise RuntimeError(
+                "No fue posible extraer los datos con el proveedor de IA configurado."
+            ) from exc
+
+    @staticmethod
+    def _extraer_precio(texto: str) -> Optional[float]:
+        texto_normalizado = normalizar_texto(texto)
+        patron = re.compile(
+            r"(?P<simbolo>\$\s*)?"
+            r"(?P<cifra>\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d{1,2})?"
+            r"|\d+(?:[.,]\d+)?|un|uno|una|dos|tres|cuatro|cinco|"
+            r"seis|siete|ocho|nueve|diez)"
+            r"\s*(?P<unidad>millones?|millon|mil)?"
+            r"\s*(?P<moneda>pesos?|cop)?",
+            re.IGNORECASE,
+        )
+        menciones_precio = [
+            match.start()
+            for match in re.finditer(
+                r"\b(?:canon|arriendo|arrendar|alquiler|precio|renta|"
+                r"cobro|pido|cuesta|vale|mensual|al mes)\b",
+                texto_normalizado,
+            )
+        ]
+        candidatos = []
+        for match in patron.finditer(texto_normalizado):
+            prefijo = texto_normalizado[max(0, match.start() - 45):match.start()]
+            sufijo = texto_normalizado[match.end():match.end() + 24]
+            unidad = (match.group("unidad") or "").lower()
+            moneda_explicita = bool(
+                match.group("simbolo")
+                or match.group("moneda")
+                or unidad
+            )
+            distancia_pista = min(
+                (
+                    min(abs(match.start() - posicion), abs(match.end() - posicion))
+                    for posicion in menciones_precio
+                ),
+                default=10_000,
+            )
+            pista_cercana = distancia_pista <= 35 or any(
+                pista in sufijo for pista in ("mensual", "al mes")
+            )
+            if not moneda_explicita and not pista_cercana:
+                continue
+
+            cifra = match.group("cifra").lower()
+            if cifra in PALABRAS_A_NUMEROS:
+                valor = float(PALABRAS_A_NUMEROS[cifra])
+            else:
+                cifra = re.sub(r"\s+", "", cifra)
+                if "." in cifra and "," in cifra:
+                    separador_decimal = max(cifra.rfind("."), cifra.rfind(","))
+                    parte_entera = re.sub(r"[.,]", "", cifra[:separador_decimal])
+                    parte_decimal = cifra[separador_decimal + 1:]
+                    cifra = f"{parte_entera}.{parte_decimal}"
+                elif "." in cifra or "," in cifra:
+                    separador = "." if "." in cifra else ","
+                    partes = cifra.split(separador)
+                    if len(partes) > 2 or len(partes[-1]) == 3:
+                        cifra = "".join(partes)
+                    else:
+                        cifra = f"{partes[0]}.{partes[1]}"
+                try:
+                    valor = float(cifra)
+                except ValueError:
+                    continue
+
+            if unidad.startswith("millon"):
+                valor *= 1_000_000
+            elif unidad == "mil":
+                valor *= 1_000
+            elif valor < 100_000:
+                continue
+
+            if 100_000 <= valor <= 99_999_999:
+                candidatos.append(
+                    (moneda_explicita, distancia_pista, match.start(), round(valor, 2))
+                )
+
+        if not candidatos:
+            return None
+        mejor = max(candidatos, key=lambda candidato: (
+            candidato[0],
+            -candidato[1],
+            candidato[2],
+        ))
+        return mejor[3]
+
+    @staticmethod
+    def _extraer_respuesta_contextual(
+        texto: str,
+        historial: List[Dict[str, Any]],
+    ) -> Dict[str, Any]:
+        contenido = texto.strip()
+        if not re.fullmatch(
+            r"\d{1,3}(?:[.,\s]\d{3})+(?:[.,]\d{1,2})?|\d+(?:[.,]\d+)?",
+            contenido,
+        ):
             return {}
+        pregunta = next(
+            (
+                normalizar_texto(mensaje.get("contenido", ""))
+                for mensaje in reversed(historial)
+                if mensaje.get("rol") == "asistente"
+            ),
+            "",
+        )
+        if any(palabra in pregunta for palabra in ("canon", "precio", "arriendo")):
+            precio = ExtractorInmueble._extraer_precio(
+                f"canon de {contenido}"
+            )
+            return {"precio_mensual": precio} if precio is not None else {}
+        try:
+            valor = float(contenido.replace(",", "."))
+        except ValueError:
+            return {}
+        if any(palabra in pregunta for palabra in ("area", "metros cuadrados")):
+            return {"area_m2": valor} if 10 <= valor <= 1000 else {}
+        if "estrato" in pregunta:
+            return {"estrato": int(valor)} if valor.is_integer() and 1 <= valor <= 6 else {}
+        if any(palabra in pregunta for palabra in ("habitacion", "alcoba")):
+            return {"habitaciones": int(valor)} if valor.is_integer() and 1 <= valor <= 20 else {}
+        if "bano" in pregunta:
+            return {"banos": int(valor)} if valor.is_integer() and 1 <= valor <= 20 else {}
+        return {}
 
     @staticmethod
     def combinar_y_validar(
         datos_previos: Dict[str, Any],
         datos_nuevos: Dict[str, Any]
     ) -> Dict[str, Any]:
+        """Combina datos previos con nuevos y valida sus valores."""
 
         resultado = dict(datos_previos or {})
 
@@ -411,7 +573,7 @@ class ExtractorInmueble:
             elif valor is not None:
                 resultado[clave] = valor
 
-        # Validar habitaciones.
+        # Habitaciones
         if "habitaciones" in resultado:
             try:
                 habitaciones = int(resultado["habitaciones"])
@@ -424,7 +586,7 @@ class ExtractorInmueble:
             except (ValueError, TypeError):
                 resultado.pop("habitaciones", None)
 
-        # Validar baÃ±os.
+        # Baños
         if "banos" in resultado:
             try:
                 banos = int(resultado["banos"])
@@ -437,7 +599,7 @@ class ExtractorInmueble:
             except (ValueError, TypeError):
                 resultado.pop("banos", None)
 
-        # Validar estrato.
+        # Estrato
         if "estrato" in resultado:
             try:
                 estrato = int(resultado["estrato"])
@@ -450,7 +612,7 @@ class ExtractorInmueble:
             except (ValueError, TypeError):
                 resultado.pop("estrato", None)
 
-        # Validar area.
+        # Área
         if "area_m2" in resultado:
             try:
                 area = float(resultado["area_m2"])
@@ -463,44 +625,60 @@ class ExtractorInmueble:
             except (ValueError, TypeError):
                 resultado.pop("area_m2", None)
 
-        # Validar tipo.
+        # Canon mensual
+        if "precio_mensual" in resultado:
+            try:
+                precio = float(resultado["precio_mensual"])
+                if not 100_000 <= precio <= 99_999_999:
+                    raise ValueError
+                resultado["precio_mensual"] = round(precio, 2)
+            except (ValueError, TypeError):
+                resultado.pop("precio_mensual", None)
+
+        # Tipo
         if resultado.get("tipo") not in {
             "casa",
             "apartamento",
             "habitacion",
-            "finca"
+            "finca",
         }:
             resultado.pop("tipo", None)
 
-        # Validar barrio.
+        # Barrio
         if (
             not isinstance(resultado.get("barrio"), str)
             or not resultado.get("barrio", "").strip()
         ):
             resultado.pop("barrio", None)
 
-        # Validar direccion.
-        if (
-            not isinstance(resultado.get("direccion"), str)
-            or not resultado.get("direccion", "").strip()
-        ):
-            resultado.pop("direccion", None)
+        # Dirección
+        if "direccion" in resultado:
+            if not isinstance(resultado["direccion"], str):
+                resultado.pop("direccion", None)
+            else:
+                direccion = resultado["direccion"].strip()
 
-        # Validar parqueadero.
+                if len(direccion) < 5 or len(direccion) > 500:
+                    resultado.pop("direccion", None)
+                else:
+                    resultado["direccion"] = direccion
+
+        # Parqueadero
         if (
             "parqueadero" in resultado
             and not isinstance(resultado["parqueadero"], bool)
         ):
             resultado.pop("parqueadero", None)
 
-        # Validar caracteristicas.
+        # Características
         if not isinstance(resultado.get("caracteristicas", []), list):
             resultado.pop("caracteristicas", None)
-
         else:
             resultado["caracteristicas"] = [
                 caracteristica.strip()
-                for caracteristica in resultado.get("caracteristicas", [])
+                for caracteristica in resultado.get(
+                    "caracteristicas", []
+                )
                 if isinstance(caracteristica, str)
                 and caracteristica.strip()
             ]
@@ -508,8 +686,20 @@ class ExtractorInmueble:
         return resultado
 
     @staticmethod
-    def obtener_campos_faltantes(datos: Dict[str, Any]) -> List[str]:
-        """Determina los datos obligatorios que aun faltan."""
+    def obtener_campos_faltantes(
+        datos: Dict[str, Any]
+    ) -> List[str]:
+        """
+        Determina los datos obligatorios para registrar una propiedad.
+
+        Se requieren:
+        - barrio
+        - tipo
+        - habitaciones
+        - banos
+        - direccion
+        - estrato
+        """
 
         faltantes = []
 
@@ -531,6 +721,9 @@ class ExtractorInmueble:
         if not datos.get("estrato"):
             faltantes.append("estrato")
 
+        if not datos.get("precio_mensual"):
+            faltantes.append("precio_mensual")
+
         return faltantes
 
     @staticmethod
@@ -540,6 +733,7 @@ class ExtractorInmueble:
         faltantes: List[str],
         es_completo: bool,
     ) -> str:
+        """Construye la respuesta y las preguntas del asistente."""
 
         partes_reconocidas = []
 
@@ -550,7 +744,7 @@ class ExtractorInmueble:
 
         if datos_actualizados.get("direccion"):
             partes_reconocidas.append(
-                f"direcciÃ³n **{datos_actualizados['direccion']}**"
+                f"dirección **{datos_actualizados['direccion']}**"
             )
 
         if datos_actualizados.get("tipo"):
@@ -560,17 +754,17 @@ class ExtractorInmueble:
 
         if datos_actualizados.get("habitaciones"):
             partes_reconocidas.append(
-                f"con **{datos_actualizados['habitaciones']} habitaciÃ³n(es)**"
+                f"con **{datos_actualizados['habitaciones']} habitación(es)**"
             )
 
         if datos_actualizados.get("banos"):
             partes_reconocidas.append(
-                f"**{datos_actualizados['banos']} baÃ±o(s)**"
+                f"**{datos_actualizados['banos']} baño(s)**"
             )
 
         if datos_actualizados.get("area_m2"):
             partes_reconocidas.append(
-                f"**{datos_actualizados['area_m2']} mÂ²**"
+                f"**{datos_actualizados['area_m2']} m²**"
             )
 
         if datos_actualizados.get("parqueadero") is True:
@@ -582,6 +776,11 @@ class ExtractorInmueble:
         if datos_actualizados.get("estrato"):
             partes_reconocidas.append(
                 f"estrato **{datos_actualizados['estrato']}**"
+            )
+
+        if datos_actualizados.get("precio_mensual"):
+            partes_reconocidas.append(
+                f"canon mensual de **${datos_actualizados['precio_mensual']:,.0f} COP**"
             )
 
         if datos_actualizados.get("caracteristicas"):
@@ -597,7 +796,7 @@ class ExtractorInmueble:
 
         if partes_reconocidas:
             reconocido_texto = (
-                "Â¡Perfecto! Ya registrÃ© los siguientes detalles "
+                "¡Perfecto! Ya registré los siguientes detalles "
                 "de tu inmueble: "
                 + "; ".join(partes_reconocidas)
                 + ".\n\n"
@@ -606,49 +805,58 @@ class ExtractorInmueble:
         if es_completo:
             return (
                 f"{reconocido_texto}"
-                "Â¡Tenemos toda la informaciÃ³n necesaria! "
-                "A continuaciÃ³n he generado una descripciÃ³n comercial "
-                "y una recomendaciÃ³n de canon mensual. "
-                "Por favor revisa los resultados antes de confirmar "
-                "el registro de tu propiedad."
+                "¡Tenemos toda la información obligatoria! "
+                "Ahora he generado una descripción comercial y una "
+                "recomendación de canon mensual basada en la información "
+                "disponible del mercado. "
+                "Revisa los resultados y ajusta los datos que necesites "
+                "antes de registrar tu propiedad."
             )
 
-        preguntas = []
+        preguntas_faltantes = []
 
         if "barrio" in faltantes:
-            preguntas.append(
-                "Â¿En quÃ© **barrio o sector** se encuentra ubicado?"
+            preguntas_faltantes.append(
+                "¿En qué **barrio o sector** se encuentra ubicado?"
             )
 
         if "tipo" in faltantes:
-            preguntas.append(
-                "Â¿QuÃ© **tipo de inmueble** es "
-                "(apartamento, casa, habitaciÃ³n o finca)?"
+            preguntas_faltantes.append(
+                "¿Qué **tipo de inmueble** es "
+                "(apartamento, casa, habitación o finca)?"
             )
 
         if "habitaciones" in faltantes:
-            preguntas.append(
-                "Â¿CuÃ¡ntas **habitaciones o alcobas** tiene?"
+            preguntas_faltantes.append(
+                "¿Cuántas **habitaciones o alcobas** tiene?"
             )
 
         if "banos" in faltantes:
-            preguntas.append(
-                "Â¿CuÃ¡ntos **baÃ±os** tiene?"
+            preguntas_faltantes.append(
+                "¿Cuántos **baños** tiene?"
             )
 
         if "direccion" in faltantes:
-            preguntas.append(
-                "Â¿CuÃ¡l es la **direcciÃ³n exacta** del inmueble? "
-                "Por ejemplo: Carrera 45 # 12-30."
+            preguntas_faltantes.append(
+                "¿Cuál es la **dirección exacta** del inmueble? "
+                "Por ejemplo: Calle 10 # 20-30."
             )
 
         if "estrato" in faltantes:
-            preguntas.append(
-                "Â¿QuÃ© **estrato** tiene la propiedad?"
+            preguntas_faltantes.append(
+                "¿Qué **estrato socioeconómico** tiene? "
+                "Indícame un número del 1 al 6."
+            )
+
+        if "precio_mensual" in faltantes:
+            preguntas_faltantes.append(
+                "¿Cuál es el **canon mensual de arriendo** que quieres cobrar? "
+                "Puedes escribirlo, por ejemplo, como $1.800.000."
             )
 
         preguntas_formateadas = "\n".join(
-            f"- {pregunta}" for pregunta in preguntas
+            f"- {pregunta}"
+            for pregunta in preguntas_faltantes
         )
 
         opcional_tip = ""
@@ -656,17 +864,18 @@ class ExtractorInmueble:
         if (
             "area_m2" not in datos_actualizados
             or "parqueadero" not in datos_actualizados
+            or not datos_actualizados.get("caracteristicas")
         ):
             opcional_tip = (
-                "\n\n*(TambiÃ©n puedes indicar el Ã¡rea en metros "
-                "cuadrados, si tiene parqueadero y otras amenidades. "
-                "Estos datos son opcionales.)*"
+                "\n\n*(También puedes mencionar, si lo deseas, "
+                "el área en metros cuadrados, si tiene parqueadero "
+                "y sus características especiales.)*"
             )
 
         return (
             f"{reconocido_texto}"
-            "Para continuar con el registro de tu propiedad, "
-            f"aÃºn necesito que me indiques:\n{preguntas_formateadas}"
+            "¡Vamos muy bien! Para completar el registro de tu inmueble "
+            "todavía necesito estos datos:\n"
+            f"{preguntas_formateadas}"
             f"{opcional_tip}"
         )
-

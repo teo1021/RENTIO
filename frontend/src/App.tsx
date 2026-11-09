@@ -13,21 +13,23 @@ import Dashboard from './pages/Dashboard';
 import PropiedadesList from './pages/propiedades/PropiedadesList';
 import ArriendosList from './pages/arriendos/ArriendosList';
 import UsuariosList from './pages/usuarios/UsuariosList';
-import IAMarketing from './pages/marketing/IAMarketing';
+import AsistenteIA from './pages/ia/AsistenteIA';
 import Profile from './pages/perfil/Profile';
 import Catalogos from './pages/catalogos/Catalogos';
 
-type ProtectedProps = {
+interface ProtectedProps {
   children: ReactNode;
   roles?: Rol[];
-};
+}
 
-// IMPORTANTE: estos componentes deben estar fuera de AppRoutes.
 function Protected({ children, roles }: ProtectedProps) {
   const authenticated = useAuthStore((state) => state.isAuthenticated);
   const user = useAuthStore((state) => state.user);
 
-  if (!authenticated) return <Navigate to="/login" replace />;
+  if (!authenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
   if (roles && user && !roles.includes(user.rol)) {
     return <Navigate to="/dashboard" replace />;
   }
@@ -67,7 +69,7 @@ function Bootstrap() {
           if (active) setUser(profile);
         })
         .catch(() => {
-          // El interceptor de Axios gestiona los JWT inválidos.
+          // Axios interceptor clears invalid JWTs.
         })
         .finally(() => {
           if (active) {
@@ -113,50 +115,18 @@ function AppRoutes() {
       >
         <Route index element={<Navigate to="/dashboard" replace />} />
         <Route path="dashboard" element={<Dashboard />} />
-        <Route path="propiedades" element={<PropiedadesList />} />
-        <Route
-          path="arriendos"
-          element={
-            <Protected roles={['arrendatario', 'propietario']}>
-              <ArriendosList />
-            </Protected>
-          }
-        />
-        <Route
-          path="usuarios"
-          element={
-            <Protected roles={['admin']}>
-              <UsuariosList />
-            </Protected>
-          }
-        />
-        <Route
-          path="catalogos"
-          element={
-            <Protected roles={['admin']}>
-              <Catalogos />
-            </Protected>
-          }
-        />
-        <Route
-          path="marketing-ia"
-          element={
-            <Protected roles={['propietario']}>
-              <IAMarketing />
-            </Protected>
-          }
-        />
+        <Route path="propiedades" element={<Protected><PropiedadesList /></Protected>} />
+        <Route path="arriendos" element={<Protected roles={['arrendatario', 'propietario']}><ArriendosList /></Protected>} />
+        <Route path="usuarios" element={<Protected roles={['admin']}><UsuariosList /></Protected>} />
+        <Route path="catalogos" element={<Protected roles={['admin']}><Catalogos /></Protected>} />
+        <Route path="asistente-ia" element={<Protected roles={['propietario']}><AsistenteIA /></Protected>} />
+        <Route path="marketing-ia" element={<Navigate to="/asistente-ia" replace />} />
         <Route path="perfil" element={<Profile />} />
       </Route>
 
       <Route
         path="*"
-        element={
-          <Navigate
-            to={authenticated ? '/dashboard' : '/login'}
-            replace
-          />
-        }
+        element={<Navigate to={authenticated ? '/dashboard' : '/login'} replace />}
       />
     </Routes>
   );

@@ -72,3 +72,24 @@ class MejorarTituloDTO(Schema):
     )
     tipo = fields.String(load_default="apartamento")
     caracteristicas_destacadas = fields.List(fields.String(), load_default=[])
+
+
+class ExtraerDatosPropiedadDTO(Schema):
+    """Validación de datos para extraer información de propiedad desde un texto libre."""
+
+    texto = fields.String(
+        required=True,
+        validate=validate.Length(min=10, max=5000),
+        error_messages={"required": "El texto con la descripción del inmueble es obligatorio."},
+    )
+    barrios_disponibles = fields.List(fields.String(), load_default=[])
+
+
+class BuscarPropiedadesDTO(Schema):
+    """Validación de datos para buscar propiedades con texto libre."""
+
+    consulta = fields.String(
+        required=True,
+        validate=validate.Length(min=3, max=500),
+        error_messages={"required": "La consulta de búsqueda es obligatoria."},
+    )

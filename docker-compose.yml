@@ -1,11 +1,30 @@
 services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: ${DB_NAME:-rentio}
+      POSTGRES_USER: ${DB_USER:-rentio}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:-rentio_local_only}
+    ports:
+      - "${DB_PORT_HOST:-5433}:5432"
+    volumes:
+      - rentio_postgres:/var/lib/postgresql/data
+      - ./backend/sql/create_database.sql:/docker-entrypoint-initdb.d/001-create-database.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-rentio} -d ${DB_NAME:-rentio}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
   ai-service:
     build:
       context: .
       dockerfile: ai_service/Dockerfile
-    env_file:
-      - ./ai_service/.env
     environment:
+      INTERNAL_API_KEY: ${AI_INTERNAL_API_KEY:-rentio-local-only-change-this-key}
+      AI_PROVIDER: ${AI_PROVIDER:-openai}
+      AI_API_KEY: ${AI_API_KEY:-}
+      AI_MODEL: ${AI_MODEL:-gpt-4o-mini}
       DATA_DIR: /app/data
     ports:
       - "5001:5001"
@@ -20,15 +39,25 @@ services:
   backend:
     build:
       context: ./backend
-    env_file:
-      - ./backend/.env
     environment:
-      DB_HOST: host.docker.internal
+      SECRET_KEY: ${SECRET_KEY:-replace-with-a-long-random-local-secret}
+      DB_USER: ${DB_USER:-rentio}
+      DB_PASSWORD: ${DB_PASSWORD:-rentio_local_only}
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_NAME: ${DB_NAME:-rentio}
       AI_SERVICE_URL: http://ai-service:5001
-    extra_hosts:
-      - "host.docker.internal:host-gateway"
+      AI_INTERNAL_API_KEY: ${AI_INTERNAL_API_KEY:-rentio-local-only-change-this-key}
     ports:
       - "5000:5000"
+    volumes:
+      - rentio_uploads:/app/app/static/uploads/propiedades
     depends_on:
+      postgres:
+        condition: service_healthy
       ai-service:
         condition: service_healthy
+
+volumes:
+  rentio_postgres:
+  rentio_uploads:

@@ -79,7 +79,17 @@ def conversar(solicitud: ConversarRequest):
     4. Si está completo, genera descripción comercial y recomendación de canon.
     5. Retorna la respuesta guiada del asistente.
     """
-    datos_extraidos = extractor.extraer(solicitud.mensaje_usuario, solicitud.datos_previos)
+    try:
+        datos_extraidos = extractor.extraer(
+            solicitud.mensaje_usuario,
+            solicitud.datos_previos,
+            solicitud.historial,
+        )
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     datos_actualizados = extractor.combinar_y_validar(solicitud.datos_previos, datos_extraidos)
     datos_faltantes = extractor.obtener_campos_faltantes(datos_actualizados)
     es_completo = len(datos_faltantes) == 0

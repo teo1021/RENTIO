@@ -74,6 +74,16 @@ class PropiedadServicio:
     """Lógica de negocio para el dominio de propiedades."""
 
     @staticmethod
+    def obtener_por_id(propiedad_id):
+        """Obtiene una propiedad o informa que no existe."""
+        propiedad = PropiedadRepositorio.obtener_por_id(propiedad_id)
+        if propiedad is None:
+            raise PropiedadNoEncontradaError(
+                f"Propiedad con id {propiedad_id} no encontrada."
+            )
+        return propiedad
+
+    @staticmethod
     def crear(datos, propietario_id, commit=True):
         """
         Crea una nueva propiedad asociada a un propietario.
@@ -108,11 +118,6 @@ class PropiedadServicio:
         PropiedadRepositorio.guardar(propiedad, commit=commit)
 
         return propiedad
-
-    @staticmethod
-    def obtener_por_id(propiedad_id):
-        """Obtiene una propiedad por su identificador."""
-        return PropiedadRepositorio.obtener_por_id(propiedad_id)
 
     @staticmethod
     def listar(filtros=None):

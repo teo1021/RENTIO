@@ -1,0 +1,237 @@
+.assistant-mode-switch {
+  display: flex;
+  gap: 8px;
+  padding: 6px;
+  width: fit-content;
+  max-width: 100%;
+  border: 1px solid var(--line);
+  border-radius: 11px;
+  background: #fff;
+}
+
+.assistant-mode-switch button {
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 14px;
+  border: 0;
+  border-radius: 8px;
+  background: transparent;
+  color: #64748b;
+  font-size: 11px;
+  font-weight: 700;
+}
+
+.assistant-mode-switch .assistant-mode-active {
+  background: #e8f7f4;
+  color: #108b7d;
+}
+
+.assistant-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1.8fr) minmax(260px, 0.8fr);
+  gap: 18px;
+  align-items: start;
+}
+
+.assistant-chat-panel,
+.assistant-history-panel {
+  padding: 18px;
+  min-width: 0;
+}
+
+.assistant-toolbar {
+  display: flex;
+  align-items: end;
+  justify-content: space-between;
+  gap: 12px;
+  margin: 16px 0 12px;
+}
+
+.assistant-property-picker {
+  display: grid;
+  gap: 6px;
+  flex: 1;
+  color: #718096;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.assistant-tool-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 7px;
+  margin: 0 0 12px;
+}
+
+.assistant-tool-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  border: 1px solid #e6ebf2;
+  border-radius: 999px;
+  padding: 8px 11px;
+  background: #fff;
+  color: #52647a;
+  font-size: 10px;
+  font-weight: 700;
+}
+
+.assistant-tool-chip:hover:not(:disabled) {
+  border-color: #9edbd2;
+  color: #108b7d;
+}
+
+.assistant-chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+  min-height: 250px;
+  max-height: min(52vh, 560px);
+  overflow: auto;
+  padding: 15px 3px;
+  border-block: 1px solid #edf0f5;
+}
+
+.assistant-empty,
+.assistant-history-empty {
+  display: flex;
+  min-height: 300px;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 10px;
+  padding: 26px;
+  text-align: center;
+  color: #8190a3;
+}
+
+.assistant-empty strong {
+  max-width: 460px;
+  color: #34445a;
+  font-size: 14px;
+}
+
+.assistant-empty p,
+.assistant-history-empty p {
+  max-width: 470px;
+  margin: 0 0 7px;
+  font-size: 11px;
+  line-height: 1.7;
+}
+
+.assistant-registration-summary {
+  display: grid;
+  gap: 14px;
+  padding: 17px 3px;
+  border-bottom: 1px solid #edf0f5;
+}
+
+.assistant-registration-summary .property-detail-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.assistant-registration-summary .property-detail-meta span {
+  padding: 8px 10px;
+  border: 1px solid #edf0f5;
+  border-radius: 7px;
+  background: #fbfcfe;
+}
+
+.assistant-photo-section {
+  display: grid;
+  gap: 9px;
+}
+
+.assistant-upload-button {
+  position: relative;
+  display: inline-flex;
+  width: fit-content;
+  align-items: center;
+  gap: 8px;
+  padding: 10px 12px;
+  border: 1px solid #dfe7ef;
+  border-radius: 8px;
+  color: #52647a;
+  background: #fff;
+  font-size: 11px;
+  font-weight: 700;
+  cursor: pointer;
+}
+
+.assistant-upload-button input {
+  position: absolute;
+  inset: 0;
+  width: 100%;
+  height: 100%;
+  opacity: 0;
+  cursor: pointer;
+}
+
+.assistant-result-card {
+  display: grid;
+  gap: 10px;
+  padding: 14px;
+  margin: 10px 0;
+  border: 1px solid #e6ebf2;
+  border-radius: 10px;
+  background: #fbfcfe;
+}
+
+.assistant-history-panel {
+  display: grid;
+  gap: 14px;
+}
+
+.assistant-history-panel .chat-conversation-list {
+  max-height: 48vh;
+  overflow: auto;
+}
+
+.assistant-composer {
+  align-items: end;
+}
+
+.assistant-composer textarea {
+  min-height: 54px;
+  resize: vertical;
+}
+
+.assistant-composer button {
+  flex: 0 0 42px;
+}
+
+@media (max-width: 900px) {
+  .assistant-layout {
+    grid-template-columns: minmax(0, 1fr);
+  }
+
+  .assistant-history-panel .chat-conversation-list {
+    max-height: 260px;
+  }
+}
+
+@media (max-width: 600px) {
+  .assistant-mode-switch {
+    width: 100%;
+  }
+
+  .assistant-mode-switch button {
+    flex: 1;
+    justify-content: center;
+    padding: 10px 6px;
+    font-size: 10px;
+  }
+
+  .assistant-toolbar {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .assistant-chat-panel,
+  .assistant-history-panel {
+    padding: 13px;
+  }
+}
