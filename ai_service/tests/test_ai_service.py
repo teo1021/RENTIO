@@ -58,6 +58,89 @@ def test_extractor_atributos():
     assert "Balcón" in datos.get("caracteristicas", [])
 
 
+def test_extractor_distingue_tipo_de_inmueble_y_numero_de_habitaciones():
+    extractor = ExtractorInmueble(recomendador=RecomendadorPrecio())
+    casos = [
+        ("Tengo un apartamento en Laureles con 3 habitaciones", "apartamento", 3),
+        ("Tengo una casa en Laureles con 2 habitaciones", "casa", 2),
+        ("Ofrezco una habitación en Laureles", "habitacion", None),
+    ]
+    for texto, tipo_esperado, habitaciones_esperadas in casos:
+        datos = extractor.extraer(texto)
+        assert datos["tipo"] == tipo_esperado
+        if habitaciones_esperadas is not None:
+            assert datos["habitaciones"] == habitaciones_esperadas
+
+    datos_previos = {"tipo": "apartamento"}
+    respuesta = extractor.extraer("Tiene 4 habitaciones", datos_previos)
+    assert "tipo" not in respuesta
+    assert ExtractorInmueble.combinar_y_validar(datos_previos, respuesta)["tipo"] == "apartamento"
+
+
+def test_extractor_reconoce_barrios_con_puntuacion_y_ubicaciones_escritas():
+    extractor = ExtractorInmueble(recomendador=RecomendadorPrecio())
+
+    catalogo = extractor.extraer(
+        "Tengo un apartamento en El Nogal Los Almendros",
+        barrios_disponibles=["El Nogal-Los Almendros"],
+    )
+    assert catalogo["barrio"] == "El Nogal-Los Almendros"
+
+    escrito = extractor.extraer(
+        "Tengo un apartamento en el barrio La Arboleda con dos habitaciones",
+        barrios_disponibles=["Laureles"],
+    )
+    assert escrito["barrio"] == "La Arboleda"
+
+    respuesta = extractor.extraer(
+        "La Arboleda",
+        historial=[{"rol": "asistente", "contenido": "¿En qué barrio está el inmueble?"}],
+    )
+    assert respuesta["barrio"] == "La Arboleda"
+
+
+def test_extractor_reconoce_comuna_del_catalogo():
+    extractor = ExtractorInmueble(recomendador=RecomendadorPrecio())
+    datos = extractor.extraer(
+        "Apartamento en la comuna 11",
+        barrios_disponibles=["Comuna 11 - Laureles-Estadio"],
+    )
+    assert datos["barrio"] == "Comuna 11 - Laureles-Estadio"
+    assert datos["barrio_comuna"] == "Comuna 11"
+
+
+def test_registro_solicita_confirmacion_de_canon_sugerido_o_manual():
+    extractor = ExtractorInmueble(recomendador=RecomendadorPrecio())
+    datos_previos = {
+        "barrio": "Laureles",
+        "tipo": "apartamento",
+        "habitaciones": 2,
+        "banos": 1,
+        "direccion": "Calle 30 # 80-25",
+        "estrato": 4,
+        "canon_sugerido": 3_400_000,
+    }
+
+    aceptacion = extractor.extraer("Acepto el canon sugerido", datos_previos)
+    aceptados = extractor.combinar_y_validar(datos_previos, aceptacion)
+    assert aceptados["precio_mensual"] == 3_400_000
+    assert aceptados["canon_confirmado"] is True
+
+    rechazo = extractor.extraer("Rechazo la sugerencia de canon", datos_previos)
+    rechazados = extractor.combinar_y_validar(datos_previos, rechazo)
+    assert rechazados["canon_confirmado"] is False
+    assert rechazados["canon_rechazado"] is True
+
+    ingreso_manual = extractor.extraer(
+        "El canon mensual que decido cobrar es $2.100.000",
+        rechazados,
+    )
+    confirmados = extractor.combinar_y_validar(rechazados, ingreso_manual)
+    assert confirmados["precio_mensual"] == 2_100_000
+    assert confirmados["canon_confirmado"] is True
+    assert confirmados["canon_rechazado"] is False
+
+
 def test_chat_flujo_incompleto_a_completo():
     """Verifica la detección de campos faltantes y la posterior completitud con generación."""
     # Turno 1: Faltan baños
@@ -114,6 +197,8 @@ def test_extractor_reconoce_canon_en_pesos_y_respuesta_corta_contextual():
         [{"rol": "asistente", "contenido": "¿Cuál es el canon mensual que quieres cobrar?"}],
     )
     assert precio["precio_mensual"] == 1_800_000
+    assert precio["canon_confirmado"] is True
+    assert precio["canon_rechazado"] is False
 
 
 def test_canon_es_obligatorio_para_completar_registro():
@@ -126,7 +211,62 @@ def test_canon_es_obligatorio_para_completar_registro():
         "direccion": "Calle 30 # 80-25",
         "estrato": 4,
     }
-    assert extractor.obtener_campos_faltantes(datos) == ["precio_mensual"]
+    assert extractor.obtener_campos_faltantes(datos) == []
+    respuesta = client.post(
+        "/api/v1/ia/conversar",
+        headers=AUTH_HEADERS,
+        json={"mensaje_usuario": "Listo", "datos_previos": datos},
+    )
+    assert respuesta.status_code == 200
+    assert respuesta.json()["es_completo"] is False
+    assert respuesta.json()["datos_actualizados"].get("canon_confirmado") is not True
+    assert respuesta.json()["resultado_generado"]["precio_estimado"] > 0
+
+
+def test_analisis_mercado_no_inventa_demanda_ni_vacancia():
+    respuesta = client.post(
+        "/api/v1/ia/analisis-mercado",
+        headers=AUTH_HEADERS,
+        json={"barrio": "Laureles"},
+    )
+    assert respuesta.status_code == 200
+    datos = respuesta.json()
+    assert "no disponible" in datos["nivel_demanda"].lower()
+    assert datos["tiempo_promedio_vacancia_dias"] is None
+    assert "no disponible" in datos["tendencia_mercado"].lower()
+
+
+def test_titulos_de_marketing_no_inventan_caracteristicas():
+    respuesta = client.post(
+        "/api/v1/ia/mejorar-titulo",
+        headers=AUTH_HEADERS,
+        json={
+            "titulo_actual": "Apartamento en Laureles",
+            "barrio": "Laureles",
+            "tipo": "apartamento",
+        },
+    )
+    assert respuesta.status_code == 200
+    titulos = respuesta.json()["titulos_sugeridos"]
+    assert len(titulos) >= 2
+    assert all("hermoso" not in titulo.lower() for titulo in titulos)
+    assert all("iluminación" not in titulo.lower() for titulo in titulos)
+
+
+def test_error_del_proveedor_ia_no_se_presenta_como_resultado_valido(monkeypatch):
+    monkeypatch.setattr(settings, "AI_API_KEY", "test-key")
+
+    def fallar(*_args):
+        raise RuntimeError("Proveedor no disponible.")
+
+    monkeypatch.setattr("app.generador_descripcion.GeneradorDescripcion._invocar_llm", fallar)
+    respuesta = client.post(
+        "/api/v1/ia/generar-descripcion",
+        headers=AUTH_HEADERS,
+        json={"barrio": "Laureles", "tipo": "apartamento"},
+    )
+    assert respuesta.status_code == 503
+    assert "Proveedor no disponible" in respuesta.json()["detail"]
 
 
 def test_chat_permite_corregir_un_dato_previamente_proporcionado():

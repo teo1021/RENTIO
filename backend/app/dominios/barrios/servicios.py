@@ -57,6 +57,7 @@ class BarrioServicio:
             nombre=datos["nombre"],
             comuna=datos["comuna"],
             zona=datos["zona"],
+            tipo=datos.get("tipo", "barrio"),
         )
         return BarrioRepositorio.guardar(barrio)
 

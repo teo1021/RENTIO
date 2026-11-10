@@ -26,6 +26,10 @@ class SolicitudArriendo(db.Model):
         nullable=False,
     )
     mensaje = db.Column(db.Text, nullable=True)
+    arrendatario_nombre = db.Column(db.String(100), nullable=True)
+    arrendatario_apellido = db.Column(db.String(100), nullable=True)
+    arrendatario_cedula = db.Column(db.String(20), nullable=True)
+    arrendatario_telefono = db.Column(db.String(20), nullable=True)
     estado = db.Column(
         db.Enum("pendiente", "aceptada", "rechazada", name="estado_solicitud"),
         nullable=False,
@@ -79,6 +83,12 @@ class SolicitudArriendo(db.Model):
                 else None
             ),
             "mensaje": self.mensaje,
+            "datos_arrendatario": {
+                "nombre": self.arrendatario_nombre,
+                "apellido": self.arrendatario_apellido,
+                "cedula": self.arrendatario_cedula,
+                "telefono": self.arrendatario_telefono,
+            },
             "estado": self.estado,
             "fecha_solicitud": self.fecha_solicitud.isoformat() if self.fecha_solicitud else None,
             "contrato": self.contrato.to_dict() if self.contrato else None,
@@ -103,6 +113,7 @@ class ContratoArriendo(db.Model):
     fecha_inicio = db.Column(db.Date, nullable=False)
     fecha_fin = db.Column(db.Date, nullable=False)
     precio_acordado = db.Column(db.Numeric(10, 2), nullable=False)
+    contenido = db.Column(db.Text, nullable=True)
     estado = db.Column(
         db.Enum("activo", "finalizado", "cancelado", name="estado_contrato"),
         nullable=False,
@@ -125,6 +136,7 @@ class ContratoArriendo(db.Model):
             "fecha_inicio": self.fecha_inicio.isoformat() if self.fecha_inicio else None,
             "fecha_fin": self.fecha_fin.isoformat() if self.fecha_fin else None,
             "precio_acordado": float(self.precio_acordado) if self.precio_acordado else None,
+            "contenido": self.contenido,
             "estado": self.estado,
             "fecha_creacion": self.fecha_creacion.isoformat() if self.fecha_creacion else None,
         }

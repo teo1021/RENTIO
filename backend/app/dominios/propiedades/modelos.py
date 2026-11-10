@@ -42,7 +42,17 @@ class Propiedad(db.Model):
     habitaciones = db.Column(db.Integer, nullable=False, default=1)
     banos = db.Column(db.Integer, nullable=False, default=1)
     tipo = db.Column(
-        db.Enum("casa", "apartamento", "habitacion", "finca", name="tipo_propiedad"),
+        db.Enum(
+            "casa",
+            "apartamento",
+            "habitacion",
+            "apartaestudio",
+            "local_comercial",
+            "oficina",
+            "bodega",
+            "finca",
+            name="tipo_propiedad",
+        ),
         nullable=False,
         default="apartamento",
     )

@@ -6,7 +6,16 @@ Schemas de Marshmallow para validar operaciones CRUD y filtrado.
 
 from marshmallow import Schema, fields, validate
 
-TIPOS_PROPIEDAD = ["casa", "apartamento", "habitacion", "finca"]
+TIPOS_PROPIEDAD = [
+    "casa",
+    "apartamento",
+    "habitacion",
+    "apartaestudio",
+    "local_comercial",
+    "oficina",
+    "bodega",
+    "finca",
+]
 ESTADOS_PROPIEDAD = ["disponible", "arrendada", "inactiva"]
 
 

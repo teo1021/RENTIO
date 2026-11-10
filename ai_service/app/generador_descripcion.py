@@ -41,10 +41,12 @@ class GeneradorDescripcion:
                 g_model = genai.GenerativeModel(model)
                 response = g_model.generate_content(f"{prompt_sistema}\n\n{prompt_usuario}")
                 return response.text.strip()
-        except Exception:
-            return None
+        except Exception as exc:
+            raise RuntimeError(
+                "No fue posible generar contenido con el proveedor de IA configurado."
+            ) from exc
 
-        return None
+        raise RuntimeError(f"El proveedor de IA '{provider}' no está soportado.")
 
     @classmethod
     def generar(cls, datos: Dict[str, Any]) -> Dict[str, Any]:
@@ -60,6 +62,7 @@ class GeneradorDescripcion:
         area = datos.get("area_m2")
         parqueadero = datos.get("parqueadero")
         caracteristicas = datos.get("caracteristicas", [])
+        descripcion_actual = datos.get("descripcion_actual")
         tono = datos.get("tono", "atractivo y moderno")
 
         # Texto de amenidades strictly from input
@@ -87,9 +90,14 @@ class GeneradorDescripcion:
             detalles_usuario.append("Parqueadero: No incluye parqueadero")
         if caracs_str:
             detalles_usuario.append(f"Amenidades confirmadas: {caracs_str}")
+        if descripcion_actual and descripcion_actual.strip():
+            detalles_usuario.append(
+                f"Descripción previa que debes mejorar sin agregar hechos: {descripcion_actual.strip()}"
+            )
 
         prompt_usuario = (
-            f"Crea una descripción comercial para arriendo en Medellín con los siguientes datos confirmados:\n"
+            f"{'Mejora la descripción previa' if descripcion_actual else 'Crea una descripción comercial'} "
+            f"para arriendo en Medellín con los siguientes datos confirmados:\n"
             + "\n".join(f"- {d}" for d in detalles_usuario)
             + f"\nTono deseado: {tono}. "
             "Responde únicamente con el texto listo para publicar en el portal, destacando la ubicación y distribución."
@@ -109,11 +117,10 @@ class GeneradorDescripcion:
                 amenidades_frase = ""
 
             texto_ia = (
-                f"¡Gran oportunidad de arriendo en {barrio}! "
-                f"Se arrienda acogedor {tipo}{area_frase}{estrato_frase}, "
+                f"Arriendo de {tipo} en {barrio}{area_frase}{estrato_frase}, "
                 f"distribuido en {habitaciones} habitación(es) y {banos} baño(s). "
                 f"{amenidades_frase}{parq_frase} "
-                f"¡Contáctanos para obtener más información y agendar una visita!"
+                "Para obtener más información, contacta al propietario."
             )
 
         # Puntos destacados

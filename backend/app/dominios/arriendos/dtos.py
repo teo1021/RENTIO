@@ -20,6 +20,14 @@ class SolicitarArriendoDTO(Schema):
         load_default=None,
         validate=validate.Length(max=1000),
     )
+    arrendatario_nombre = fields.String(required=True, validate=validate.Length(min=1, max=100))
+    arrendatario_apellido = fields.String(required=True, validate=validate.Length(min=1, max=100))
+    arrendatario_cedula = fields.String(
+        required=True, validate=validate.Regexp(r"^[0-9A-Za-z.-]{5,20}$")
+    )
+    arrendatario_telefono = fields.String(
+        required=True, validate=validate.Regexp(r"^[0-9+() -]{7,20}$")
+    )
 
 
 class ResponderSolicitudDTO(Schema):
@@ -37,5 +45,5 @@ class ResponderSolicitudDTO(Schema):
     fecha_fin = fields.Date(load_default=None)
     precio_acordado = fields.Float(
         load_default=None,
-        validate=validate.Range(min=0, error="El precio acordado debe ser positivo."),
+        validate=validate.Range(min=1, error="El precio acordado debe ser mayor que cero."),
     )

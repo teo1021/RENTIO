@@ -5,6 +5,7 @@ API principal de FastAPI para el servicio independiente de IA Marketing — RENT
 from typing import Optional
 
 from fastapi import Depends, FastAPI, Header, HTTPException, status
+from openai import APIError, OpenAI
 
 from app.config import settings
 from app.extractor import ExtractorInmueble
@@ -17,6 +18,8 @@ from app.schemas import (
     ConversarResponse,
     EstimarPrecioRequest,
     EstimarPrecioResponse,
+    GenerarContratoRequest,
+    GenerarContratoResponse,
     GenerarDescripcionRequest,
     GenerarDescripcionResponse,
     MejorarTituloRequest,
@@ -84,6 +87,7 @@ def conversar(solicitud: ConversarRequest):
             solicitud.mensaje_usuario,
             solicitud.datos_previos,
             solicitud.historial,
+            solicitud.barrios_disponibles,
         )
     except RuntimeError as exc:
         raise HTTPException(
@@ -92,10 +96,10 @@ def conversar(solicitud: ConversarRequest):
         ) from exc
     datos_actualizados = extractor.combinar_y_validar(solicitud.datos_previos, datos_extraidos)
     datos_faltantes = extractor.obtener_campos_faltantes(datos_actualizados)
-    es_completo = len(datos_faltantes) == 0
+    datos_basicos_completos = len(datos_faltantes) == 0
 
     resultado_generado = None
-    if es_completo:
+    if datos_basicos_completos:
         # 1. Recomendación empírica de precio
         try:
             estimacion = recomendador.estimar_precio(
@@ -108,6 +112,7 @@ def conversar(solicitud: ConversarRequest):
             )
         except ValueError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
+        datos_actualizados["canon_sugerido"] = estimacion["precio_sugerido"]
 
         # 2. Descripción comercial publicable
         desc_resultado = generador.generar(datos_actualizados)
@@ -123,11 +128,16 @@ def conversar(solicitud: ConversarRequest):
             analisis_resumido=estimacion["analisis"],
         )
 
+    es_completo = (
+        datos_basicos_completos
+        and datos_actualizados.get("canon_confirmado") is True
+        and bool(datos_actualizados.get("precio_mensual"))
+    )
     respuesta_asistente = extractor.construir_respuesta_asistente(
         datos_actualizados=datos_actualizados,
         datos_nuevos=datos_extraidos,
         faltantes=datos_faltantes,
-        es_completo=es_completo,
+        es_completo=datos_basicos_completos,
     )
 
     return ConversarResponse(
@@ -138,6 +148,70 @@ def conversar(solicitud: ConversarRequest):
         respuesta_asistente=respuesta_asistente,
         resultado_generado=resultado_generado,
     )
+
+
+@app.post(
+    "/api/v1/ia/generar-contrato",
+    response_model=GenerarContratoResponse,
+    dependencies=[Depends(verificar_llave_interna)],
+    tags=["Contratos"],
+)
+def generar_contrato(solicitud: GenerarContratoRequest):
+    """Genera una plantilla sin datos personales ni económicos del arrendamiento."""
+    if settings.AI_PROVIDER != "openai" or not settings.AI_API_KEY:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La generación de contratos requiere un proveedor de IA configurado.",
+        )
+
+    marcadores = (
+        "{{ARRENDADOR_NOMBRE}}, {{ARRENDATARIO_NOMBRE}}, "
+        "{{ARRENDATARIO_CEDULA}}, {{ARRENDATARIO_TELEFONO}}, "
+        "{{INMUEBLE_DIRECCION}}, {{INMUEBLE_BARRIO}}, "
+        "{{FECHA_INICIO}}, {{FECHA_FIN}}, {{CANON_MENSUAL}}"
+    )
+    try:
+        respuesta = OpenAI(api_key=settings.AI_API_KEY).chat.completions.create(
+            model=settings.AI_MODEL,
+            temperature=0.2,
+            messages=[
+                {
+                    "role": "system",
+                    "content": (
+                        "Redacta en español colombiano una plantilla clara de borrador "
+                        "para un contrato de arrendamiento de vivienda urbana en Colombia. "
+                        "No cites leyes ni inventes requisitos legales. Incluye identificación "
+                        "de las partes, inmueble, plazo, canon y condiciones generales de pago, "
+                        "obligaciones, terminación y firmas. Conserva literalmente todos estos "
+                        f"marcadores para sustitución local: {marcadores}. "
+                        "No agregues nombres, cifras, fechas ni cláusulas punitivas no provistas. "
+                        "Aclara que es un borrador sujeto a revisión jurídica."
+                    ),
+                },
+                {
+                    "role": "user",
+                    "content": "Genera únicamente la plantilla solicitada. No recibes datos personales.",
+                },
+            ],
+        )
+        plantilla = (respuesta.choices[0].message.content or "").strip()
+    except APIError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="No fue posible generar la plantilla de contrato. Inténtalo de nuevo.",
+        ) from exc
+
+    if not plantilla:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="El proveedor de IA no devolvió una plantilla de contrato.",
+        )
+    if any(marcador not in plantilla for marcador in marcadores.split(", ")):
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail="La plantilla generada no conservó todos los campos contractuales. Inténtalo de nuevo.",
+        )
+    return GenerarContratoResponse(plantilla=plantilla)
 
 
 @app.post(
@@ -177,7 +251,13 @@ def estimar_precio(solicitud: EstimarPrecioRequest):
 )
 def generar_descripcion(solicitud: GenerarDescripcionRequest):
     """Genera una descripción publicable para un inmueble."""
-    res = generador.generar(solicitud.model_dump())
+    try:
+        res = generador.generar(solicitud.model_dump())
+    except RuntimeError as exc:
+        raise HTTPException(
+            status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
+            detail=str(exc),
+        ) from exc
     return GenerarDescripcionResponse(
         descripcion=res["descripcion"],
         puntos_destacados=res["puntos_destacados"],
@@ -191,33 +271,18 @@ def generar_descripcion(solicitud: GenerarDescripcionRequest):
     tags=["Mercado"],
 )
 def analisis_mercado(solicitud: AnalisisMercadoRequest):
-    """Análisis cualitativo y cuantitativo de absorción y demanda por zona."""
-    barrio_lower = solicitud.barrio.lower()
-    if "poblado" in barrio_lower:
-        demanda = "Muy Alta (perfil nómadas digitales, ejecutivos y extranjeros)"
-        vacancia = 15
-        tendencia = "Al alza debido a alta demanda turística y corporativa."
-    elif "laureles" in barrio_lower:
-        demanda = "Alta (familias, estudiantes de posgrado y profesionales)"
-        vacancia = 20
-        tendencia = "Estable con alta valorización por ambiente caminable y gastronomía."
-    elif "belen" in barrio_lower or "belén" in barrio_lower:
-        demanda = "Alta (familias y jóvenes profesionales)"
-        vacancia = 25
-        tendencia = "Excelente conectividad Metroplús y amplia oferta comercial."
-    else:
-        demanda = "Moderada a Alta"
-        vacancia = 30
-        tendencia = "Crecimiento sostenido en el área metropolitana del Valle de Aburrá."
-
+    """Reporta con claridad las métricas de mercado que no están disponibles."""
     return AnalisisMercadoResponse(
         zona=f"{solicitud.barrio}, Medellín",
         estrato_predominante=solicitud.estrato,
         tipo_inmueble=solicitud.tipo or "apartamento",
-        nivel_demanda=demanda,
-        tiempo_promedio_vacancia_dias=vacancia,
-        tendencia_mercado=tendencia,
-        recomendacion="Publicar con fotografías iluminadas y contrato garantizado.",
+        nivel_demanda="No disponible: las fuentes actuales contienen avisos, no mediciones de demanda.",
+        tiempo_promedio_vacancia_dias=None,
+        tendencia_mercado="No disponible: las fuentes actuales no contienen una serie histórica.",
+        recomendacion=(
+            "Consulta la referencia de canon, que se calcula con los avisos de arriendo "
+            "disponibles y sus limitaciones documentadas."
+        ),
     )
 
 
@@ -228,17 +293,17 @@ def analisis_mercado(solicitud: AnalisisMercadoRequest):
     tags=["Marketing"],
 )
 def mejorar_titulo(solicitud: MejorarTituloRequest):
-    """Genera títulos atractivos para portales inmobiliarios."""
-    destacado = solicitud.caracteristicas_destacadas[0] if solicitud.caracteristicas_destacadas else "Excelente Ubicación"
-    tipo = (solicitud.tipo or "Apartamento").title()
-    barrio = solicitud.barrio
-
+    """Propone variantes fieles a los datos del inmueble, sin atributos supuestos."""
+    tipo = (solicitud.tipo or "inmueble").replace("_", " ")
+    barrio = solicitud.barrio.strip()
     titulos = [
-        f"Hermoso {tipo} en {barrio} | {destacado} y Gran Iluminación",
-        f"Arriendo en {barrio} — {tipo} Moderno con {destacado}",
-        f"Espectacular {tipo} en {barrio} — Ideal para Vivir Cómodo",
-        f"Oportunidad en Medellín: {tipo} en {barrio} | Ubicación Insuperable",
+        f"Arriendo de {tipo} en {barrio}",
+        f"{tipo.title()} disponible para arriendo en {barrio}",
     ]
+    if solicitud.titulo_actual.strip():
+        titulos.append(
+            f"{solicitud.titulo_actual.strip()} | {tipo.title()} en {barrio}"
+        )
     return MejorarTituloResponse(
         titulo_original=solicitud.titulo_actual,
         titulos_sugeridos=titulos,

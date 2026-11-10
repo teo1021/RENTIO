@@ -58,6 +58,17 @@ AMENIDADES_CATALOGO = [
     ("parqueadero visitantes", "Parqueadero de visitantes"),
 ]
 
+TIPOS_PROPIEDAD = {
+    "casa",
+    "apartamento",
+    "habitacion",
+    "apartaestudio",
+    "local_comercial",
+    "oficina",
+    "bodega",
+    "finca",
+}
+
 
 def normalizar_texto(texto: str) -> str:
     """Quita acentos y pasa el texto a minúsculas."""
@@ -65,9 +76,10 @@ def normalizar_texto(texto: str) -> str:
         return ""
 
     texto = texto.lower()
-    return unicodedata.normalize("NFKD", texto).encode(
+    texto = unicodedata.normalize("NFKD", texto).encode(
         "ASCII", "ignore"
     ).decode("utf-8")
+    return re.sub(r"[^a-z0-9]+", " ", texto).strip()
 
 
 class ExtractorInmueble:
@@ -81,6 +93,7 @@ class ExtractorInmueble:
         texto: str,
         datos_previos: Optional[Dict[str, Any]] = None,
         historial: Optional[List[Dict[str, Any]]] = None,
+        barrios_disponibles: Optional[List[str]] = None,
     ) -> Dict[str, Any]:
         """Extrae características del mensaje actual."""
 
@@ -94,28 +107,31 @@ class ExtractorInmueble:
             self._extraer_con_modelo(texto, datos_previos, historial)
         )
 
-        # 1. Tipo de inmueble
-        if "apartaestudio" in t_norm:
-            extraidos["tipo"] = "apartamento"
-
-            if "habitaciones" not in datos_previos:
+        # "Habitaciones" describes a room count, not the property's type.
+        tipos_mencionados = self._tipos_explicitos(t_norm)
+        if len(tipos_mencionados) == 1:
+            extraidos["tipo"] = tipos_mencionados[0]
+            if tipos_mencionados[0] == "apartaestudio" and "habitaciones" not in datos_previos:
                 extraidos["habitaciones"] = 1
+        elif not tipos_mencionados:
+            extraidos.pop("tipo", None)
+        elif len(tipos_mencionados) > 1:
+            tipo_previo = datos_previos.get("tipo")
+            if tipo_previo not in tipos_mencionados or not re.search(
+                r"\b(?:correccion|quise decir|en realidad|me equivoque|no es)\b",
+                t_norm,
+            ):
+                extraidos.pop("tipo", None)
 
-        elif "apartamento" in t_norm or "apto" in t_norm:
-            extraidos["tipo"] = "apartamento"
-
-        elif "casa" in t_norm:
-            extraidos["tipo"] = "casa"
-
-        elif (
-            "habitacion" in t_norm
-            or "cuarto solo" in t_norm
-            or "pieza" in t_norm
-        ):
-            extraidos["tipo"] = "habitacion"
-
-        elif "finca" in t_norm:
-            extraidos["tipo"] = "finca"
+        texto_normalizado = t_norm
+        aceptacion_canon = re.search(
+            r"\b(?:acepto|confirmo|estoy de acuerdo|si,? acepto)\b",
+            texto_normalizado,
+        )
+        rechazo_canon = re.search(
+            r"\b(?:rechazo|no acepto|no estoy de acuerdo)\b",
+            texto_normalizado,
+        )
 
         # 2. Habitaciones
         patron_hab = re.search(
@@ -185,6 +201,19 @@ class ExtractorInmueble:
         for campo, valor in respuesta_contextual.items():
             extraidos.setdefault(campo, valor)
 
+        precio_sugerido = datos_previos.get("canon_sugerido")
+        if aceptacion_canon and precio_sugerido:
+            extraidos["precio_mensual"] = precio_sugerido
+            extraidos["canon_confirmado"] = True
+            extraidos["canon_rechazado"] = False
+        elif rechazo_canon and precio_sugerido:
+            extraidos.pop("precio_mensual", None)
+            extraidos["canon_confirmado"] = False
+            extraidos["canon_rechazado"] = True
+        elif "precio_mensual" in extraidos:
+            extraidos["canon_confirmado"] = True
+            extraidos["canon_rechazado"] = False
+
         # 6. Parqueadero
         if re.search(
             r"(sin|no\s+tiene|no\s+cuenta\s+con)\s+"
@@ -208,9 +237,28 @@ class ExtractorInmueble:
             extraidos["direccion"] = direccion
 
         # 8. Barrio
-        barrio_encontrado = None
+        barrio_encontrado = self._buscar_barrio_catalogo(
+            t_norm, barrios_disponibles or []
+        )
+        comuna_mencionada = re.search(
+            r"\bcomuna\s*(?:n(?:umero|o)?\s*)?(\d{1,2})\b",
+            t_norm,
+        )
+        if not barrio_encontrado and comuna_mencionada:
+            numero_comuna = comuna_mencionada.group(1)
+            barrio_encontrado = next(
+                (
+                    nombre.strip()
+                    for nombre in barrios_disponibles or []
+                    if re.match(
+                        rf"comuna\s*{re.escape(numero_comuna)}\b",
+                        normalizar_texto(nombre),
+                    )
+                ),
+                None,
+            )
 
-        if self.recomendador:
+        if not barrio_encontrado and self.recomendador:
             patron_en = re.findall(
                 r"(?:en|barrio|sector|ubicado en|zona)\s+"
                 r"([a-záéíóúñ\s]{3,30})",
@@ -281,8 +329,17 @@ class ExtractorInmueble:
                             barrio_encontrado = coincidencia["nombre"]
                             break
 
+        if not barrio_encontrado:
+            barrio_encontrado = self._extraer_ubicacion_declarada(
+                texto,
+                historial,
+            )
+
         if barrio_encontrado:
             extraidos["barrio"] = barrio_encontrado
+
+        if comuna_mencionada:
+            extraidos["barrio_comuna"] = f"Comuna {comuna_mencionada.group(1)}"
 
         # 9. Características y amenidades
         caracteristicas_detectadas = []
@@ -299,6 +356,93 @@ class ExtractorInmueble:
             extraidos["caracteristicas"] = caracteristicas_detectadas
 
         return extraidos
+
+    @staticmethod
+    def _tipos_explicitos(texto_normalizado: str) -> List[str]:
+        expresiones = (
+            ("apartaestudio", r"\bapartaestudio\b"),
+            ("apartamento", r"\b(?:apartamento|apto)\b"),
+            ("casa", r"\bcasa\b"),
+            ("habitacion", r"\b(?:habitacion|cuarto solo|pieza)\b"),
+            ("local_comercial", r"\blocal comercial\b"),
+            ("oficina", r"\boficina\b"),
+            ("bodega", r"\bbodega\b"),
+            ("finca", r"\bfinca\b"),
+        )
+        tipos = []
+        for tipo, expresion in expresiones:
+            for coincidencia in re.finditer(expresion, texto_normalizado):
+                prefijo = texto_normalizado[max(0, coincidencia.start() - 24):coincidencia.start()]
+                if re.search(
+                    r"\b(?:no|ni|tampoco)\s+(?:es\s+|tengo\s+|quiero\s+|busco\s+)?$",
+                    prefijo,
+                ):
+                    continue
+                tipos.append(tipo)
+                break
+        return tipos
+
+    @staticmethod
+    def _buscar_barrio_catalogo(
+        texto_normalizado: str, barrios_disponibles: List[str]
+    ) -> Optional[str]:
+        for nombre in sorted(barrios_disponibles, key=len, reverse=True):
+            nombre_normalizado = normalizar_texto(nombre)
+            if nombre_normalizado and re.search(
+                r"(?<![a-z0-9])" + re.escape(nombre_normalizado) + r"(?![a-z0-9])",
+                texto_normalizado,
+            ):
+                return nombre.strip()
+        return None
+
+    @staticmethod
+    def _extraer_ubicacion_declarada(
+        texto: str,
+        historial: List[Dict[str, Any]],
+    ) -> Optional[str]:
+        coincidencia = re.search(
+            r"\b(?:barrio|sector|vereda)\s+(?:de\s+)?(.+)",
+            texto,
+            flags=re.IGNORECASE,
+        )
+        if not coincidencia:
+            coincidencia = re.search(
+               r"\b(?:en|ubicado en|ubicada en|queda en)\s+(.+)",
+               texto,
+               flags=re.IGNORECASE,
+            )
+
+        ubicacion = coincidencia.group(1) if coincidencia else ""
+        if not ubicacion and historial:
+            ultimo_asistente = next(
+               (
+                   item.get("contenido", "")
+                   for item in reversed(historial)
+                   if item.get("rol") == "asistente"
+               ),
+               "",
+            )
+            if re.search(r"\b(?:barrio|sector|vereda|comuna)\b", ultimo_asistente, re.IGNORECASE):
+               ubicacion = texto
+
+        if not ubicacion:
+            return None
+
+        ubicacion = re.split(
+            r"[,;\n]|\b(?:con|tiene|cuenta|estrato|área|area|canon|precio|"
+            r"habitaciones|baños|banos|parqueadero|y)\b",
+            ubicacion,
+            maxsplit=1,
+            flags=re.IGNORECASE,
+        )[0].strip(" .:")
+        ubicacion_normalizada = normalizar_texto(ubicacion)
+        if (
+            len(ubicacion_normalizada) < 2
+            or len(ubicacion) > 100
+            or ubicacion_normalizada in {"medellin", "colombia", "renta", "arriendo", "alquiler"}
+        ):
+            return None
+        return ubicacion
 
     @staticmethod
     def _extraer_direccion(texto: str) -> Optional[str]:
@@ -636,12 +780,7 @@ class ExtractorInmueble:
                 resultado.pop("precio_mensual", None)
 
         # Tipo
-        if resultado.get("tipo") not in {
-            "casa",
-            "apartamento",
-            "habitacion",
-            "finca",
-        }:
+        if resultado.get("tipo") not in TIPOS_PROPIEDAD:
             resultado.pop("tipo", None)
 
         # Barrio
@@ -721,9 +860,6 @@ class ExtractorInmueble:
         if not datos.get("estrato"):
             faltantes.append("estrato")
 
-        if not datos.get("precio_mensual"):
-            faltantes.append("precio_mensual")
-
         return faltantes
 
     @staticmethod
@@ -802,15 +938,37 @@ class ExtractorInmueble:
                 + ".\n\n"
             )
 
+        if es_completo and datos_actualizados.get("canon_rechazado"):
+            return (
+                f"{reconocido_texto}Entendido. La sugerencia de mercado no fija el precio. "
+                "Indica el canon mensual que tú decides cobrar para continuar."
+            )
+
+        if (
+            es_completo
+            and datos_actualizados.get("canon_confirmado")
+            and datos_actualizados.get("precio_mensual")
+        ):
+            return (
+                f"{reconocido_texto}Canon confirmado por ti: "
+                f"**${datos_actualizados['precio_mensual']:,.0f} COP mensuales**. "
+                "Puedes revisar el resumen, corregir los datos y confirmar el registro."
+            )
+
+        if es_completo and datos_actualizados.get("canon_sugerido"):
+            return (
+                f"{reconocido_texto}Según las características de tu inmueble y las referencias "
+                "disponibles, el canon mensual aproximado sugerido es "
+                f"**${datos_actualizados['canon_sugerido']:,.0f} COP**. "
+                "La sugerencia no establece el precio: acepta el valor o recházalo e indica "
+                "el canon que tú decides cobrar."
+            )
+
         if es_completo:
             return (
                 f"{reconocido_texto}"
                 "¡Tenemos toda la información obligatoria! "
-                "Ahora he generado una descripción comercial y una "
-                "recomendación de canon mensual basada en la información "
-                "disponible del mercado. "
-                "Revisa los resultados y ajusta los datos que necesites "
-                "antes de registrar tu propiedad."
+                "Revisa la información y confirma el canon que deseas cobrar."
             )
 
         preguntas_faltantes = []
@@ -846,12 +1004,6 @@ class ExtractorInmueble:
             preguntas_faltantes.append(
                 "¿Qué **estrato socioeconómico** tiene? "
                 "Indícame un número del 1 al 6."
-            )
-
-        if "precio_mensual" in faltantes:
-            preguntas_faltantes.append(
-                "¿Cuál es el **canon mensual de arriendo** que quieres cobrar? "
-                "Puedes escribirlo, por ejemplo, como $1.800.000."
             )
 
         preguntas_formateadas = "\n".join(

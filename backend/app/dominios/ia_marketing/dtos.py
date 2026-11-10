@@ -22,7 +22,10 @@ class GenerarDescripcionDTO(Schema):
     area_m2 = fields.Float(load_default=None)
     caracteristicas = fields.List(fields.String(), load_default=[])
     precio_mensual = fields.Float(load_default=None)
+    descripcion_actual = fields.String(load_default=None, allow_none=True)
     tono = fields.String(load_default="atractivo y moderno")
+    conversacion_id = fields.Integer(load_default=None)
+    solicitud = fields.String(load_default=None, allow_none=True)
 
 
 class SugerirPrecioDTO(Schema):
@@ -43,6 +46,8 @@ class SugerirPrecioDTO(Schema):
     habitaciones = fields.Integer(load_default=2)
     banos = fields.Integer(load_default=2)
     caracteristicas = fields.List(fields.String(), load_default=[])
+    conversacion_id = fields.Integer(load_default=None)
+    solicitud = fields.String(load_default=None, allow_none=True)
 
 
 class AnalisisMercadoDTO(Schema):
@@ -55,6 +60,8 @@ class AnalisisMercadoDTO(Schema):
     )
     tipo = fields.String(load_default="apartamento")
     estrato = fields.Integer(load_default=4, validate=validate.Range(min=1, max=6))
+    conversacion_id = fields.Integer(load_default=None)
+    solicitud = fields.String(load_default=None, allow_none=True)
 
 
 class MejorarTituloDTO(Schema):
@@ -72,6 +79,8 @@ class MejorarTituloDTO(Schema):
     )
     tipo = fields.String(load_default="apartamento")
     caracteristicas_destacadas = fields.List(fields.String(), load_default=[])
+    conversacion_id = fields.Integer(load_default=None)
+    solicitud = fields.String(load_default=None, allow_none=True)
 
 
 class ExtraerDatosPropiedadDTO(Schema):

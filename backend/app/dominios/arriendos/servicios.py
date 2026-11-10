@@ -5,8 +5,6 @@ Lógica de negocio para solicitudes y formalización de contratos.
 Define excepciones de dominio propias.
 """
 
-from datetime import date, timedelta
-
 from app.dominios.arriendos.modelos import ContratoArriendo, SolicitudArriendo
 from app.dominios.arriendos.repositorios import ContratoRepositorio, SolicitudRepositorio
 from app.dominios.propiedades.repositorios import PropiedadRepositorio
@@ -92,6 +90,10 @@ class ArriendoServicio:
             propiedad_id=propiedad_id,
             arrendatario_id=arrendatario_id,
             mensaje=datos.get("mensaje"),
+            arrendatario_nombre=datos["arrendatario_nombre"].strip(),
+            arrendatario_apellido=datos["arrendatario_apellido"].strip(),
+            arrendatario_cedula=datos["arrendatario_cedula"].strip(),
+            arrendatario_telefono=datos["arrendatario_telefono"].strip(),
         )
         return SolicitudRepositorio.guardar(solicitud)
 
@@ -130,20 +132,14 @@ class ArriendoServicio:
             raise EstadoSolicitudInvalidoError("La solicitud ya fue respondida previamente.")
 
         nuevo_estado = datos["estado"]
-        solicitud.estado = nuevo_estado
 
         if nuevo_estado == "aceptada":
-            fecha_inicio = datos.get("fecha_inicio") or date.today()
-            fecha_fin = datos.get("fecha_fin") or (fecha_inicio + timedelta(days=365))
-            precio_acordado = datos.get("precio_acordado") or float(
-                solicitud.propiedad.precio_mensual
-            )
-
             contrato = ContratoArriendo(
                 solicitud_id=solicitud.id,
-                fecha_inicio=fecha_inicio,
-                fecha_fin=fecha_fin,
-                precio_acordado=precio_acordado,
+                fecha_inicio=datos["fecha_inicio"],
+                fecha_fin=datos["fecha_fin"],
+                precio_acordado=datos["precio_acordado"],
+                contenido=datos["contenido"],
                 estado="activo",
             )
             ContratoRepositorio.guardar(contrato)
@@ -152,6 +148,7 @@ class ArriendoServicio:
             solicitud.propiedad.estado = "arrendada"
             PropiedadRepositorio.guardar(solicitud.propiedad)
 
+        solicitud.estado = nuevo_estado
         SolicitudRepositorio.guardar(solicitud)
         return solicitud
 

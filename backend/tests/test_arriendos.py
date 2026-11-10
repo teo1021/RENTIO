@@ -6,7 +6,9 @@ from app.dominios.propiedades.modelos import Propiedad
 from app.dominios.propiedades.repositorios import PropiedadRepositorio
 
 
-def test_flujo_solicitud_y_contrato_arriendo(client, propietario_auth, arrendatario_auth, db):
+def test_flujo_solicitud_y_contrato_arriendo(
+    client, propietario_auth, arrendatario_auth, db, monkeypatch
+):
     """Verifica el flujo completo de arriendo: solicitud, respuesta del propietario y generación de contrato."""
     propietario = propietario_auth["usuario"]
     headers_prop = propietario_auth["headers"]
@@ -35,6 +37,10 @@ def test_flujo_solicitud_y_contrato_arriendo(client, propietario_auth, arrendata
         json={
             "propiedad_id": propiedad.id,
             "mensaje": "Hola, estoy interesado para mudarme pronto.",
+            "arrendatario_nombre": "Ana",
+            "arrendatario_apellido": "Pérez",
+            "arrendatario_cedula": "123456789",
+            "arrendatario_telefono": "3001234567",
         },
     )
     assert res_sol.status_code == 201
@@ -46,7 +52,13 @@ def test_flujo_solicitud_y_contrato_arriendo(client, propietario_auth, arrendata
     res_dup = client.post(
         "/api/v1/arriendos/solicitar",
         headers=headers_arren,
-        json={"propiedad_id": propiedad.id},
+        json={
+            "propiedad_id": propiedad.id,
+            "arrendatario_nombre": "Ana",
+            "arrendatario_apellido": "Pérez",
+            "arrendatario_cedula": "123456789",
+            "arrendatario_telefono": "3001234567",
+        },
     )
     assert res_dup.status_code == 409
 
@@ -59,10 +71,48 @@ def test_flujo_solicitud_y_contrato_arriendo(client, propietario_auth, arrendata
     assert len(res_recibidas.get_json()["data"]) >= 1
 
     # 5. Propietario acepta la solicitud -> genera contrato y arrienda propiedad
+    from app.dominios.arriendos import controladores
+
+    llamada_ia = []
+    monkeypatch.setattr(
+        controladores,
+        "generar_plantilla_contrato",
+        lambda: llamada_ia.append(True),
+    )
+    respuesta_no_autorizada = client.patch(
+        f"/api/v1/arriendos/{sol_id}/responder",
+        headers=headers_arren,
+        json={
+            "estado": "aceptada",
+            "fecha_inicio": "2026-12-01",
+            "fecha_fin": "2027-11-30",
+            "precio_acordado": 4500000.0,
+        },
+    )
+    assert respuesta_no_autorizada.status_code == 403
+    assert llamada_ia == []
+
+    monkeypatch.setattr(
+        controladores,
+        "generar_plantilla_contrato",
+        lambda: {
+            "plantilla": (
+                "{{ARRENDADOR_NOMBRE}} {{ARRENDATARIO_NOMBRE}} "
+                "{{ARRENDATARIO_CEDULA}} {{ARRENDATARIO_TELEFONO}} "
+                "{{INMUEBLE_DIRECCION}} {{INMUEBLE_BARRIO}} "
+                "{{FECHA_INICIO}} {{FECHA_FIN}} {{CANON_MENSUAL}}"
+            )
+        },
+    )
     res_resp = client.patch(
         f"/api/v1/arriendos/{sol_id}/responder",
         headers=headers_prop,
-        json={"estado": "aceptada", "precio_acordado": 4500000.0},
+        json={
+            "estado": "aceptada",
+            "fecha_inicio": "2026-12-01",
+            "fecha_fin": "2027-11-30",
+            "precio_acordado": 4500000.0,
+        },
     )
     assert res_resp.status_code == 200
     sol_actualizada = res_resp.get_json()["data"]
@@ -81,3 +131,6 @@ def test_flujo_solicitud_y_contrato_arriendo(client, propietario_auth, arrendata
     contratos = res_contratos.get_json()["data"]
     assert len(contratos) >= 1
     assert contratos[0]["precio_acordado"] == 4500000.0
+    assert "123456789" in contratos[0]["contenido"]
+    assert "3001234567" in contratos[0]["contenido"]
+    assert "$4,500,000 COP" in contratos[0]["contenido"]

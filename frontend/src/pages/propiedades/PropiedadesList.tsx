@@ -57,6 +57,17 @@ type PropertyForm = {
   barrio_id: string;
 };
 
+const typeLabels: Record<TipoPropiedad, string> = {
+  casa: 'Casa',
+  apartamento: 'Apartamento',
+  habitacion: 'Habitación',
+  apartaestudio: 'Apartaestudio',
+  local_comercial: 'Local comercial',
+  oficina: 'Oficina',
+  bodega: 'Bodega',
+  finca: 'Finca',
+};
+
 const blankForm: PropertyForm = {
   titulo: '',
   descripcion: '',
@@ -101,7 +112,21 @@ export default function PropiedadesList() {
   const [selectedFeatures, setSelectedFeatures] = useState<number[]>([]);
 
   const [requestMessage, setRequestMessage] = useState('');
+  const [applicant, setApplicant] = useState({
+    nombre: user?.perfil?.nombre || '',
+    apellido: user?.perfil?.apellido || '',
+    cedula: user?.perfil?.cedula || '',
+    telefono: user?.perfil?.telefono || '',
+  });
 
+  useEffect(() => {
+    setApplicant({
+      nombre: user?.perfil?.nombre || '',
+      apellido: user?.perfil?.apellido || '',
+      cedula: user?.perfil?.cedula || '',
+      telefono: user?.perfil?.telefono || '',
+    });
+  }, [user?.id, user?.perfil]);
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
@@ -359,10 +384,14 @@ export default function PropiedadesList() {
     setError('');
 
     try {
-      await rentalsApi.request(
-        selected.id,
-        requestMessage.trim() || undefined
-      );
+      await rentalsApi.request({
+        propiedad_id: selected.id,
+        mensaje: requestMessage.trim() || undefined,
+        arrendatario_nombre: applicant.nombre.trim(),
+        arrendatario_apellido: applicant.apellido.trim(),
+        arrendatario_cedula: applicant.cedula.trim(),
+        arrendatario_telefono: applicant.telefono.trim(),
+      });
 
       setModal(null);
       setRequestMessage('');
@@ -461,6 +490,10 @@ export default function PropiedadesList() {
               <option value="apartamento">Apartamento</option>
               <option value="casa">Casa</option>
               <option value="habitacion">Habitación</option>
+              <option value="apartaestudio">Apartaestudio</option>
+              <option value="local_comercial">Local comercial</option>
+              <option value="oficina">Oficina</option>
+              <option value="bodega">Bodega</option>
               <option value="finca">Finca</option>
             </select>
             <ChevronDown size={14} />
@@ -523,9 +556,8 @@ export default function PropiedadesList() {
 
                 <div className="property-visual-top">
                   <span className="property-type-pill">
-                    {property.tipo}
+                    {typeLabels[property.tipo]}
                   </span>
-                  <StatusBadge value={property.estado} />
                 </div>
 
                 <Building2 size={48} strokeWidth={1.1} />
@@ -541,11 +573,20 @@ export default function PropiedadesList() {
                   {property.barrio?.nombre || property.direccion}
                 </div>
 
-                <h3>{property.titulo}</h3>
+                <div className="property-card-heading">
+                  <h3>{property.titulo}</h3>
+                  <StatusBadge value={property.estado} />
+                </div>
 
                 <p className="property-address">
                   {property.direccion}
                 </p>
+
+                {property.descripcion?.trim() && (
+                  <p className="property-description-preview">
+                    {property.descripcion}
+                  </p>
+                )}
 
                 <button
                   className="property-detail-link"
@@ -793,6 +834,10 @@ export default function PropiedadesList() {
                   <option value="apartamento">Apartamento</option>
                   <option value="casa">Casa</option>
                   <option value="habitacion">Habitación</option>
+                  <option value="apartaestudio">Apartaestudio</option>
+                  <option value="local_comercial">Local comercial</option>
+                  <option value="oficina">Oficina</option>
+                  <option value="bodega">Bodega</option>
                   <option value="finca">Finca</option>
                 </select>
               </Field>
@@ -825,6 +870,13 @@ export default function PropiedadesList() {
 
                   {barrios.map((barrio) => (
                     <option key={barrio.id} value={barrio.id}>
+                      {barrio.tipo === 'vereda'
+                        ? 'Vereda '
+                        : barrio.tipo === 'sector'
+                          ? 'Sector '
+                          : barrio.tipo === 'comuna'
+                            ? ''
+                            : ''}
                       {barrio.nombre} · {barrio.comuna}
                     </option>
                   ))}
@@ -1126,6 +1178,21 @@ export default function PropiedadesList() {
               <b>
                 {money(selected.precio_mensual)} <small>/ mes</small>
               </b>
+            </div>
+
+            <div className="form-grid-two">
+              <Field label="Nombre" hint="Obligatorio para el contrato">
+                <input className="text-input" required maxLength={100} value={applicant.nombre} onChange={(event) => setApplicant((value) => ({ ...value, nombre: event.target.value }))} />
+              </Field>
+              <Field label="Apellido" hint="Obligatorio para el contrato">
+                <input className="text-input" required maxLength={100} value={applicant.apellido} onChange={(event) => setApplicant((value) => ({ ...value, apellido: event.target.value }))} />
+              </Field>
+              <Field label="Cédula">
+                <input className="text-input" required minLength={5} maxLength={20} value={applicant.cedula} onChange={(event) => setApplicant((value) => ({ ...value, cedula: event.target.value }))} />
+              </Field>
+              <Field label="Celular">
+                <input className="text-input" type="tel" required minLength={7} maxLength={20} value={applicant.telefono} onChange={(event) => setApplicant((value) => ({ ...value, telefono: event.target.value }))} />
+              </Field>
             </div>
 
             <Field

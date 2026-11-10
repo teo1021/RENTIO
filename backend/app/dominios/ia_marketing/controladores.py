@@ -6,6 +6,7 @@ Define el blueprint `ia_bp` con endpoints especializados para propietarios.
 
 import unicodedata
 import os
+import re
 
 from flask import Blueprint, current_app, jsonify, request
 from marshmallow import ValidationError
@@ -94,17 +95,50 @@ def _normalizar_texto(valor):
     if valor is None:
         return ""
     texto = str(valor).strip().lower()
-    return unicodedata.normalize("NFKD", texto).encode("ASCII", "ignore").decode("utf-8")
+    texto = unicodedata.normalize("NFKD", texto).encode("ASCII", "ignore").decode("utf-8")
+    return re.sub(r"[^a-z0-9]+", " ", texto).strip()
 
 
-def _resolver_barrio_id(nombre_barrio):
+def _resolver_barrio_id(nombre_barrio, comuna=None):
     if not nombre_barrio:
         return None
     nombre = _normalizar_texto(nombre_barrio)
-    for barrio in Barrio.query.all():
-        if _normalizar_texto(barrio.nombre) == nombre:
-            return barrio.id
-    return None
+    if not nombre:
+        return None
+    coincidencias = [
+        barrio
+        for barrio in Barrio.query.all()
+        if _normalizar_texto(barrio.nombre) == nombre
+    ]
+    if comuna is not None:
+        comuna_normalizada = _normalizar_texto(comuna)
+        coincidencias = [
+            barrio
+            for barrio in coincidencias
+            if comuna_normalizada in _normalizar_texto(barrio.comuna)
+        ]
+    if len(coincidencias) == 1:
+        return coincidencias[0].id
+
+    comuna_manual = str(comuna or "").strip()[:100]
+    if not comuna_manual:
+        comuna_manual = "Medellín (comuna no especificada)"
+    zona = "Medellín"
+    ubicacion = Barrio.query.filter_by(
+        nombre=str(nombre_barrio).strip()[:100],
+        comuna=comuna_manual,
+        tipo="sector",
+    ).first()
+    if ubicacion is None:
+        ubicacion = Barrio(
+            nombre=str(nombre_barrio).strip()[:100],
+            comuna=comuna_manual,
+            zona=zona,
+            tipo="sector",
+        )
+        db.session.add(ubicacion)
+        db.session.flush()
+    return ubicacion.id
 
 
 def _resolver_caracteristicas_ids(caracteristicas):
@@ -123,6 +157,122 @@ def _resolver_caracteristicas_ids(caracteristicas):
                 ids.append(caracteristica.id)
                 break
     return list(dict.fromkeys(ids))
+
+
+def _ejecutar_herramienta(datos, endpoint, propietario_id, prompt):
+    conversacion_id = datos.pop("conversacion_id", None)
+    solicitud = datos.pop("solicitud", None)
+    if solicitud:
+        prompt = solicitud
+    conversacion = None
+    propiedad = None
+    datos_usados = dict(datos)
+
+    if conversacion_id is not None:
+        conversacion = ConversacionMarketing.query.filter_by(
+            id=conversacion_id,
+            propietario_id=propietario_id,
+        ).first()
+        if conversacion is None or not conversacion.propiedad_id:
+            return None, (
+                jsonify({"success": False, "error": {"message": "Conversación de marketing no encontrada."}}),
+                404,
+            )
+        propiedad = Propiedad.query.filter_by(
+            id=conversacion.propiedad_id,
+            propietario_id=propietario_id,
+        ).first()
+        if propiedad is None or propiedad.barrio is None:
+            return None, (
+                jsonify({"success": False, "error": {"message": "La propiedad asociada no existe o no tiene un barrio validado."}}),
+                400,
+            )
+
+        datos_usados = {
+            "barrio": propiedad.barrio.nombre,
+            "tipo": propiedad.tipo,
+            "estrato": propiedad.estrato,
+            "habitaciones": propiedad.habitaciones,
+            "banos": propiedad.banos,
+            "area_m2": float(propiedad.area_m2) if propiedad.area_m2 is not None else None,
+            "caracteristicas": [item.nombre for item in propiedad.caracteristicas],
+        }
+        datos.update(datos_usados)
+        if "precio_mensual" in datos:
+            datos["precio_mensual"] = float(propiedad.precio_mensual)
+        if "parqueadero" in datos:
+            datos["parqueadero"] = any(
+                "parqueadero" in _normalizar_texto(item.nombre)
+                for item in propiedad.caracteristicas
+            )
+        if "titulo_actual" in datos:
+            datos["titulo_actual"] = propiedad.titulo
+        if "descripcion_actual" in datos:
+            datos["descripcion_actual"] = propiedad.descripcion
+        if "caracteristicas_destacadas" in datos:
+            datos["caracteristicas_destacadas"] = datos_usados["caracteristicas"]
+        if "tono" in datos:
+            datos["tono"] = datos.get("tono") or "atractivo y moderno"
+
+    resultado, error = _llamar_servicio_ai(endpoint, datos)
+    if error:
+        return None, error
+
+    if conversacion is not None and propiedad is not None:
+        if endpoint.endswith("/analisis-mercado"):
+            texto_resultado = "\n".join(
+                str(resultado[campo])
+                for campo in (
+                    "nivel_demanda",
+                    "tiempo_promedio_vacancia_dias",
+                    "tendencia_mercado",
+                    "recomendacion",
+                )
+                if resultado.get(campo) is not None
+            )
+        else:
+            texto_resultado = (
+                resultado.get("descripcion")
+                or resultado.get("recomendacion")
+                or resultado.get("analisis")
+                or "\n".join(map(str, resultado.get("titulos_sugeridos", [])))
+            )
+        if not texto_resultado:
+            return None, (
+                jsonify({"success": False, "error": {"message": "La IA no devolvió contenido de marketing para guardar."}}),
+                502,
+            )
+        precio = resultado.get("precio_sugerido")
+        respuesta = str(texto_resultado)
+        db.session.add(MensajeMarketing(
+            conversacion_id=conversacion.id,
+            rol="usuario",
+            contenido=prompt,
+        ))
+        db.session.add(MensajeMarketing(
+            conversacion_id=conversacion.id,
+            rol="asistente",
+            contenido=respuesta,
+        ))
+        db.session.add(ResultadoMarketing(
+            conversacion_id=conversacion.id,
+            propiedad_id=propiedad.id,
+            descripcion=respuesta,
+            precio_sugerido=precio,
+            precio_minimo=resultado.get("precio_minimo"),
+            precio_maximo=resultado.get("precio_maximo"),
+            moneda=resultado.get("moneda", "COP"),
+            datos_usados=datos_usados,
+            fuente_datos="datasets de mercado" if resultado.get("metadatos_calculo") else "propiedad del propietario",
+            version_datos=(resultado.get("metadatos_calculo") or {}).get("version_fuente"),
+            metadatos_calculo={
+                **(resultado.get("metadatos_calculo") or {}),
+                "herramienta": endpoint.rsplit("/", 1)[-1],
+            },
+        ))
+        db.session.commit()
+
+    return resultado, None
 
 
 @ia_bp.route("/conversaciones", methods=["POST"])
@@ -212,7 +362,15 @@ def enviar_mensaje(conversacion_id, usuario_id=None):
         return jsonify({"success": False, "error": {"message": str(exc)}}), exc.status_code
 
     conversacion.datos_recopilados = respuesta["datos_actualizados"]
-    conversacion.estado = "lista" if respuesta["es_completo"] else "recopilando"
+    canon_confirmado = (
+        respuesta["datos_actualizados"].get("canon_confirmado") is True
+        and float(respuesta["datos_actualizados"].get("precio_mensual") or 0) > 0
+    )
+    conversacion.estado = (
+        "lista"
+        if respuesta["es_completo"] and canon_confirmado
+        else "recopilando"
+    )
     db.session.add(MensajeMarketing(conversacion_id=conversacion.id, rol="usuario", contenido=mensaje.strip()))
     db.session.add(MensajeMarketing(
         conversacion_id=conversacion.id,
@@ -262,12 +420,21 @@ def aplicar_resultado(conversacion_id, usuario_id=None):
     ).first()
     if propiedad is None or resultado is None:
         return jsonify({"success": False, "error": {"message": "No hay un resultado aplicable."}}), 400
-    propiedad.descripcion = resultado.descripcion
-    if resultado.precio_sugerido is not None:
+    herramienta = (resultado.metadatos_calculo or {}).get("herramienta")
+    if herramienta == "analisis-mercado":
+        return jsonify({"success": False, "error": {"message": "El análisis de mercado es informativo y no se puede aplicar como descripción o canon."}}), 400
+    if herramienta == "mejorar-titulo":
+        propiedad.titulo = resultado.descripcion.splitlines()[0][:255]
+        mensaje = "Título aplicado a la propiedad."
+    else:
+        propiedad.descripcion = resultado.descripcion
+        mensaje = "Descripción aplicada a la propiedad."
+    if resultado.precio_sugerido is not None and herramienta in (None, "sugerir-precio"):
         propiedad.precio_mensual = resultado.precio_sugerido
+        mensaje = "Canon sugerido aplicado a la propiedad."
     conversacion.estado = "generada"
     db.session.commit()
-    return jsonify({"success": True, "message": "DescripciÃ³n y precio aplicados a la propiedad."}), 200
+    return jsonify({"success": True, "message": mensaje}), 200
 
 
 @ia_bp.route("/conversaciones/<int:conversacion_id>/crear-propiedad", methods=["POST"])
@@ -337,17 +504,15 @@ def crear_propiedad_desde_conversacion(conversacion_id, usuario_id=None):
                 "details": {"faltantes": faltantes},
             },
         }), 400
+    if datos.get("canon_confirmado") is not True:
+        return jsonify({
+            "success": False,
+            "error": {"message": "El propietario debe aceptar la sugerencia de mercado o confirmar expresamente su canon antes de registrar la propiedad."},
+        }), 400
 
     if not datos.get("titulo"):
         tipo = str(datos["tipo"]).strip().capitalize()
         datos["titulo"] = f"{tipo} en {str(datos['barrio']).strip()}"
-
-    datos["barrio_id"] = _resolver_barrio_id(datos["barrio"])
-    if not datos.get("barrio_id"):
-        return jsonify({
-            "success": False,
-            "error": {"message": "No se pudo validar el barrio en el catálogo de RENTIO. Corrígelo en el chat."},
-        }), 400
 
     if isinstance(datos.get("caracteristicas"), list):
         datos["caracteristicas_ids"] = _resolver_caracteristicas_ids(datos["caracteristicas"])
@@ -362,7 +527,7 @@ def crear_propiedad_desde_conversacion(conversacion_id, usuario_id=None):
         "habitaciones": datos["habitaciones"],
         "banos": datos["banos"],
         "tipo": datos["tipo"],
-        "barrio_id": datos["barrio_id"],
+        "barrio_id": None,
         "caracteristicas_ids": datos.get("caracteristicas_ids") or [],
     }
     try:
@@ -375,6 +540,10 @@ def crear_propiedad_desde_conversacion(conversacion_id, usuario_id=None):
     if validado["precio_mensual"] <= 0:
         return jsonify({"success": False, "error": {"message": "El canon mensual debe ser mayor que cero."}}), 400
 
+    validado["barrio_id"] = _resolver_barrio_id(
+        datos["barrio"],
+        datos.get("barrio_comuna"),
+    )
     propiedad = PropiedadServicio().crear(validado, usuario_id, commit=False)
     db.session.flush()
     rutas = []
@@ -429,7 +598,12 @@ def generar_descripcion(usuario_id=None):
             400,
         )
 
-    resultado, error = _llamar_servicio_ai("/api/v1/ia/generar-descripcion", datos)
+    resultado, error = _ejecutar_herramienta(
+        datos,
+        "/api/v1/ia/generar-descripcion",
+        usuario_id,
+        "Generar descripción comercial",
+    )
     if error:
         return error
     return (
@@ -464,7 +638,12 @@ def sugerir_precio(usuario_id=None):
             400,
         )
 
-    resultado, error = _llamar_servicio_ai("/api/v1/ia/estimar-precio", datos)
+    resultado, error = _ejecutar_herramienta(
+        datos,
+        "/api/v1/ia/estimar-precio",
+        usuario_id,
+        "Sugerir canon de mercado",
+    )
     if error:
         return error
     return (
@@ -499,7 +678,12 @@ def analisis_mercado(usuario_id=None):
             400,
         )
 
-    resultado, error = _llamar_servicio_ai("/api/v1/ia/analisis-mercado", datos)
+    resultado, error = _ejecutar_herramienta(
+        datos,
+        "/api/v1/ia/analisis-mercado",
+        usuario_id,
+        "Analizar el mercado de la zona",
+    )
     if error:
         return error
     return (
@@ -534,7 +718,12 @@ def mejorar_titulo(usuario_id=None):
             400,
         )
 
-    resultado, error = _llamar_servicio_ai("/api/v1/ia/mejorar-titulo", datos)
+    resultado, error = _ejecutar_herramienta(
+        datos,
+        "/api/v1/ia/mejorar-titulo",
+        usuario_id,
+        "Mejorar el título del anuncio",
+    )
     if error:
         return error
     return (

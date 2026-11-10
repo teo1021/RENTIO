@@ -16,6 +16,7 @@ class Barrio(db.Model):
     nombre = db.Column(db.String(100), nullable=False, index=True)
     comuna = db.Column(db.String(100), nullable=False)
     zona = db.Column(db.String(100), nullable=False)
+    tipo = db.Column(db.String(20), nullable=False, default="barrio")
 
     # ── Relaciones ──────────────────────────────────────────────────────
     propiedades = db.relationship(
@@ -31,6 +32,7 @@ class Barrio(db.Model):
             "nombre": self.nombre,
             "comuna": self.comuna,
             "zona": self.zona,
+            "tipo": self.tipo,
         }
 
     def __repr__(self):

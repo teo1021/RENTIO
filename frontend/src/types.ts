@@ -22,6 +22,7 @@ export interface Barrio {
   nombre: string;
   comuna: string;
   zona: string;
+  tipo: 'barrio' | 'vereda' | 'sector' | 'comuna';
 }
 
 export interface Caracteristica {
@@ -31,7 +32,15 @@ export interface Caracteristica {
 }
 
 export type EstadoPropiedad = 'disponible' | 'arrendada' | 'inactiva';
-export type TipoPropiedad = 'casa' | 'apartamento' | 'habitacion' | 'finca';
+export type TipoPropiedad =
+  | 'casa'
+  | 'apartamento'
+  | 'habitacion'
+  | 'apartaestudio'
+  | 'local_comercial'
+  | 'oficina'
+  | 'bodega'
+  | 'finca';
 
 export interface ImagenPropiedad {
   id: number;
@@ -69,6 +78,12 @@ export interface SolicitudArriendo {
     correo: string;
     perfil?: Perfil | null;
   } | null;
+  datos_arrendatario?: {
+    nombre?: string | null;
+    apellido?: string | null;
+    cedula?: string | null;
+    telefono?: string | null;
+  };
   mensaje?: string | null;
   estado: 'pendiente' | 'aceptada' | 'rechazada';
   fecha_solicitud?: string;
@@ -81,6 +96,7 @@ export interface Contrato {
   fecha_inicio: string;
   fecha_fin: string;
   precio_acordado: number;
+  contenido?: string | null;
   estado: 'activo' | 'finalizado' | 'cancelado';
   fecha_creacion?: string;
 }

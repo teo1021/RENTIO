@@ -4,6 +4,8 @@ Repositorio del dominio de barrios.
 Capa de acceso a datos para la tabla de barrios.
 """
 
+import unicodedata
+
 from app import db
 from app.dominios.barrios.modelos import Barrio
 
@@ -25,8 +27,18 @@ class BarrioRepositorio:
 
     @staticmethod
     def obtener_por_nombre_y_comuna(nombre, comuna):
-        """Obtiene un barrio por nombre y comuna."""
-        return Barrio.query.filter_by(nombre=nombre, comuna=comuna).first()
+        """Obtiene un barrio por nombre y comuna, ignorando tildes y mayúsculas."""
+        nombre_normalizado = unicodedata.normalize("NFKD", nombre.strip().lower()).encode("ASCII", "ignore").decode()
+        comuna_normalizada = unicodedata.normalize("NFKD", comuna.strip().lower()).encode("ASCII", "ignore").decode()
+        return next(
+            (
+                barrio
+                for barrio in Barrio.query.all()
+                if unicodedata.normalize("NFKD", barrio.nombre.strip().lower()).encode("ASCII", "ignore").decode() == nombre_normalizado
+                and unicodedata.normalize("NFKD", barrio.comuna.strip().lower()).encode("ASCII", "ignore").decode() == comuna_normalizada
+            ),
+            None,
+        )
 
     @staticmethod
     def obtener_todos():

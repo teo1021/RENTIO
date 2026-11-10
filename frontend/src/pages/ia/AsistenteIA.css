@@ -127,6 +127,37 @@
   border-bottom: 1px solid #edf0f5;
 }
 
+.assistant-canon-choice {
+  display: grid;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #cfeae5;
+  border-radius: 9px;
+  background: #f3fbf9;
+}
+
+.assistant-canon-choice p {
+  margin: 0;
+  color: #53677d;
+  font-size: 11px;
+  line-height: 1.65;
+}
+
+.assistant-manual-price {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: end;
+  gap: 10px;
+  padding: 13px;
+  border: 1px solid #e6ebf2;
+  border-radius: 9px;
+}
+
+.assistant-manual-price .form-field {
+  flex: 1;
+  min-width: 180px;
+}
+
 .assistant-registration-summary .property-detail-meta {
   display: flex;
   flex-wrap: wrap;

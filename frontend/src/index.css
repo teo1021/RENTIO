@@ -52,3 +52,5 @@
 .stats-grid-four{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:1180px){.stats-grid-four{grid-template-columns:repeat(2,minmax(0,1fr))}}
 @media(max-width:400px){.stats-grid-four{grid-template-columns:1fr}}
+
+.property-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.property-card-heading h3{min-width:0}.property-card-heading .status-badge{flex-shrink:0}.property-description-preview{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:3;color:#7a8798;font-size:10px;line-height:1.55;margin:5px 0 0}

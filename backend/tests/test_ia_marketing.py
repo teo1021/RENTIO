@@ -111,3 +111,68 @@ def test_ia_marketing_mejorar_titulo(client, propietario_auth, monkeypatch):
     assert res.status_code == 200
     datos = res.get_json()["data"]
     assert len(datos["titulos_sugeridos"]) >= 2
+
+
+def test_herramienta_usa_propiedad_del_propietario_y_persiste_resultado(
+    app, client, propietario_auth, monkeypatch
+):
+    from app import db
+    from app.dominios.barrios.modelos import Barrio
+    from app.dominios.caracteristicas.modelos import Caracteristica
+    from app.dominios.ia_marketing.modelos import MensajeMarketing, ResultadoMarketing
+    from app.dominios.propiedades.modelos import Propiedad
+    from app.dominios.ia_marketing import controladores
+
+    barrio = Barrio(nombre="Laureles", comuna="Comuna 11 - Laureles-Estadio", zona="Centro-occidental")
+    parqueadero = Caracteristica(nombre="Parqueadero privado")
+    db.session.add_all([barrio, parqueadero])
+    db.session.flush()
+    propiedad = Propiedad(
+        titulo="Apartamento real Laureles",
+        descripcion="Descripción real de prueba.",
+        precio_mensual=2_800_000,
+        direccion="Calle 30 # 80-25",
+        estrato=4,
+        habitaciones=2,
+        banos=1,
+        tipo="apartamento",
+        propietario_id=propietario_auth["usuario"].id,
+        barrio_id=barrio.id,
+        caracteristicas=[parqueadero],
+    )
+    db.session.add(propiedad)
+    db.session.commit()
+    conversacion = client.post(
+        "/api/v1/ia/conversaciones",
+        headers=propietario_auth["headers"],
+        json={"propiedad_id": propiedad.id},
+    ).get_json()["data"]
+    solicitudes_ia = []
+
+    def responder(endpoint, datos):
+        solicitudes_ia.append((endpoint, datos))
+        return {"descripcion": "Texto real generado", "puntos_destacados": ["Parqueadero"]}
+
+    monkeypatch.setattr(controladores, "solicitar_a_ia", responder)
+    response = client.post(
+        "/api/v1/ia/generar-descripcion",
+        headers=propietario_auth["headers"],
+        json={
+            "conversacion_id": conversacion["id"],
+            "solicitud": "Mejora la descripción de mi apartamento",
+            "barrio": "Barrio falso",
+            "tipo": "casa",
+            "estrato": 1,
+        },
+    )
+
+    assert response.status_code == 200
+    assert solicitudes_ia[0][1]["barrio"] == "Laureles"
+    assert solicitudes_ia[0][1]["tipo"] == "apartamento"
+    assert solicitudes_ia[0][1]["estrato"] == 4
+    assert solicitudes_ia[0][1]["precio_mensual"] == 2_800_000
+    assert MensajeMarketing.query.filter_by(conversacion_id=conversacion["id"]).count() == 2
+    resultado = ResultadoMarketing.query.filter_by(conversacion_id=conversacion["id"]).one()
+    assert resultado.propiedad_id == propiedad.id
+    assert resultado.descripcion == "Texto real generado"
+    assert resultado.datos_usados["barrio"] == "Laureles"

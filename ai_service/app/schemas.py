@@ -16,6 +16,7 @@ class ConversarRequest(BaseModel):
     mensaje_usuario: str = Field(..., min_length=1, description="Mensaje del propietario en lenguaje natural")
     datos_previos: Optional[Dict[str, Any]] = Field(default_factory=dict, description="Datos ya recopilados en la conversación")
     historial: Optional[List[Dict[str, Any]]] = Field(default_factory=list, description="Mensajes previos del chat")
+    barrios_disponibles: List[str] = Field(default_factory=list, description="Nombres validados del catálogo de Medellín")
 
 
 class MetadatosCalculo(BaseModel):
@@ -55,6 +56,16 @@ class ConversarResponse(BaseModel):
     resultado_generado: Optional[ResultadoGeneradoItem] = None
 
 
+class GenerarContratoRequest(BaseModel):
+    """Solicitud sin datos personales para generar únicamente una plantilla contractual."""
+
+    tipo_contrato: str = Field(default="arrendamiento_vivienda_urbana_colombia")
+
+
+class GenerarContratoResponse(BaseModel):
+    plantilla: str
+
+
 class EstimarPrecioRequest(BaseModel):
     barrio: str = Field(..., min_length=2, description="Nombre o sector del barrio")
     habitaciones: int = Field(..., ge=1, le=15, description="Cantidad de habitaciones/alcobas")
@@ -81,6 +92,7 @@ class GenerarDescripcionRequest(BaseModel):
     area_m2: Optional[float] = None
     estrato: Optional[int] = None
     caracteristicas: Optional[List[str]] = Field(default_factory=list)
+    descripcion_actual: Optional[str] = None
     tono: Optional[str] = "atractivo y moderno"
 
 
@@ -100,7 +112,7 @@ class AnalisisMercadoResponse(BaseModel):
     estrato_predominante: Optional[int] = None
     tipo_inmueble: str
     nivel_demanda: str
-    tiempo_promedio_vacancia_dias: int
+    tiempo_promedio_vacancia_dias: Optional[int] = None
     tendencia_mercado: str
     recomendacion: str
 

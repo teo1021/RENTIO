@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type FormEvent } from 'react';
+import { useEffect, useRef, useState, type FormEvent } from 'react';
 import { useSearchParams } from 'react-router-dom';
 import {
   Bot,
@@ -19,7 +19,6 @@ import { dateLabel, money } from '../../lib/format';
 import type {
   Barrio,
   ConversacionMarketing,
-  MensajeMarketing,
   Propiedad,
 } from '../../types';
 import {
@@ -64,26 +63,15 @@ const toolLabels: Record<MarketingTool, string> = {
 };
 
 const normalize = (value: string) =>
-  value.normalize('NFKD').replace(/[\u0300-\u036f]/g, '').trim().toLowerCase();
+  value
+    .normalize('NFKD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .replace(/[^a-zA-Z0-9]+/g, ' ')
+    .trim()
+    .toLowerCase();
 
 function hasValue(value: unknown) {
   return value !== undefined && value !== null && value !== '';
-}
-
-function getToolReply(tool: MarketingTool, result: Record<string, unknown>) {
-  if (tool === 'descripcion' && typeof result.descripcion === 'string') {
-    return result.descripcion;
-  }
-  if (tool === 'titulo' && Array.isArray(result.titulos_sugeridos)) {
-    return result.titulos_sugeridos.map(String).join('\n');
-  }
-  if (tool === 'precio' && typeof result.precio_sugerido === 'number') {
-    return `El canon de referencia es ${money(result.precio_sugerido)}.`;
-  }
-  if (tool === 'mercado' && typeof result.recomendacion === 'string') {
-    return `${result.nivel_demanda ? `Demanda: ${result.nivel_demanda}. ` : ''}${result.recomendacion}`;
-  }
-  return 'La herramienta respondió, pero no devolvió contenido para mostrar.';
 }
 
 export default function AsistenteIA() {
@@ -96,7 +84,7 @@ export default function AsistenteIA() {
   const [selectedProperty, setSelectedProperty] = useState('');
   const [missingFields, setMissingFields] = useState<string[]>([...REQUIRED_FIELDS]);
   const [message, setMessage] = useState('');
-  const [localMessages, setLocalMessages] = useState<MensajeMarketing[]>([]);
+  const [manualCanon, setManualCanon] = useState('');
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
   const [toolResult, setToolResult] = useState<Record<string, unknown> | null>(null);
@@ -145,15 +133,12 @@ export default function AsistenteIA() {
 
   useEffect(() => {
     endRef.current?.scrollIntoView({ behavior: 'smooth', block: 'end' });
-  }, [conversation?.mensajes.length, localMessages.length, sending]);
+  }, [conversation?.mensajes.length, sending]);
 
   const property = properties.find((item) => String(item.id) === selectedProperty) ?? null;
   const propertyData = conversation?.datos_recopilados ?? {};
   const lastResult = conversation?.resultados?.[conversation.resultados.length - 1] ?? null;
-  const allMessages = useMemo(
-    () => [...(conversation?.mensajes ?? []), ...localMessages],
-    [conversation?.mensajes, localMessages],
-  );
+  const allMessages = conversation?.mensajes ?? [];
   const isNeighborhoodValid = neighborhoods.some(
     (item) => normalize(item.nombre) === normalize(String(propertyData.barrio ?? '')),
   );
@@ -162,13 +147,11 @@ export default function AsistenteIA() {
     conversation?.estado === 'lista' &&
     missingFields.length === 0 &&
     REQUIRED_FIELDS.every((field) => hasValue(propertyData[field])) &&
-    isNeighborhoodValid &&
     Number(propertyData.precio_mensual) > 0;
 
   function changeMode(nextMode: Mode) {
     setSearchParams(nextMode === 'registro' ? { modo: 'registro' } : {});
     setConversation(null);
-    setLocalMessages([]);
     setToolResult(null);
     setError('');
     setSuccess('');
@@ -182,7 +165,6 @@ export default function AsistenteIA() {
     setChatLoading(true);
     setError('');
     setSuccess('');
-    setLocalMessages([]);
     setMessage('');
     try {
       const created = await marketingApi.createConversation(
@@ -201,7 +183,6 @@ export default function AsistenteIA() {
   async function selectConversation(id: number) {
     setChatLoading(true);
     setError('');
-    setLocalMessages([]);
     try {
       const detail = await marketingApi.conversation(id);
       setConversation(detail);
@@ -214,15 +195,6 @@ export default function AsistenteIA() {
     } finally {
       setChatLoading(false);
     }
-  }
-
-  function addLocalExchange(prompt: string, reply: string) {
-    const now = new Date().toISOString();
-    setLocalMessages((items) => [
-      ...items,
-      { id: -Date.now(), rol: 'usuario', contenido: prompt, fecha_creacion: now },
-      { id: -(Date.now() + 1), rol: 'asistente', contenido: reply, fecha_creacion: now },
-    ]);
   }
 
   async function runMarketingTool(tool: MarketingTool, prompt = toolLabels[tool]) {
@@ -239,17 +211,22 @@ export default function AsistenteIA() {
     setError('');
     setSuccess('');
     setToolResult(null);
-    if (!conversation) {
+    let activeConversation = conversation;
+    if (!activeConversation) {
       try {
         const created = await marketingApi.createConversation(Number(selectedProperty));
+        activeConversation = created;
         setConversation(created);
         setConversations((items) => [created, ...items.filter((item) => item.id !== created.id)]);
       } catch (err) {
         setError(getApiError(err, 'No fue posible iniciar la conversación de marketing.'));
+        setActiveTool(null);
         return false;
       }
     }
     const common = {
+      conversacion_id: activeConversation.id,
+      solicitud: prompt,
       barrio: property.barrio.nombre,
       tipo: property.tipo,
       estrato: property.estrato,
@@ -264,6 +241,7 @@ export default function AsistenteIA() {
         result = await marketingApi.generateDescription({
           ...common,
           precio_mensual: property.precio_mensual,
+          descripcion_actual: property.descripcion ?? undefined,
           tono: 'atractivo y moderno',
         });
       } else if (tool === 'precio') {
@@ -275,20 +253,22 @@ export default function AsistenteIA() {
         });
       } else if (tool === 'mercado') {
         result = await marketingApi.marketAnalysis({
-          barrio: common.barrio,
-          tipo: common.tipo,
-          estrato: common.estrato,
+          ...common,
         });
       } else {
         result = await marketingApi.improveTitle({
+          ...common,
           titulo_actual: property.titulo,
-          barrio: common.barrio,
-          tipo: common.tipo,
           caracteristicas_destacadas: common.caracteristicas,
         });
       }
+      const [detail, chats] = await Promise.all([
+        marketingApi.conversation(activeConversation.id),
+        marketingApi.conversations(),
+      ]);
+      setConversation(detail);
+      setConversations(chats);
       setToolResult(result);
-      addLocalExchange(prompt, getToolReply(tool, result));
       return true;
     } catch (err) {
       setError(getApiError(err, 'No fue posible completar la herramienta de marketing.'));
@@ -298,16 +278,15 @@ export default function AsistenteIA() {
     }
   }
 
-  async function sendMessage(event: FormEvent) {
-    event.preventDefault();
-    if (!conversation || !message.trim() || sending || chatLoading) return;
-    const content = message.trim();
+  async function sendTurn(content: string) {
+    if (!conversation || !content.trim() || sending || chatLoading) return;
+    const submittedContent = content.trim();
     setSending(true);
     setMessage('');
     setError('');
     try {
       if (mode === 'marketing') {
-        const normalized = normalize(content);
+        const normalized = normalize(submittedContent);
         const requestedTool: MarketingTool | null =
           /descripcion|anuncio|publicidad|publicacion|copy|texto comercial/.test(normalized)
             ? 'descripcion'
@@ -319,12 +298,12 @@ export default function AsistenteIA() {
                   ? 'mercado'
                   : null;
         if (requestedTool) {
-          await runMarketingTool(requestedTool, content);
+          await runMarketingTool(requestedTool, submittedContent);
           return;
         }
       }
 
-      const response = await marketingApi.sendMessage(conversation.id, content);
+      const response = await marketingApi.sendMessage(conversation.id, submittedContent);
       const [detail, chats] = await Promise.all([
         marketingApi.conversation(conversation.id),
         marketingApi.conversations(),
@@ -333,11 +312,27 @@ export default function AsistenteIA() {
       setConversations(chats);
       setMissingFields(response.datos_faltantes);
     } catch (err) {
-      setMessage(content);
+      setMessage(submittedContent);
       setError(getApiError(err, 'No fue posible enviar el mensaje. Revisa la conexión con el servicio de IA.'));
     } finally {
       setSending(false);
     }
+  }
+
+  async function sendMessage(event: FormEvent) {
+    event.preventDefault();
+    await sendTurn(message);
+  }
+
+  async function submitManualCanon(event: FormEvent) {
+    event.preventDefault();
+    const amount = Number(manualCanon);
+    if (!Number.isFinite(amount) || amount <= 0) {
+      setError('Ingresa un canon mensual mayor que cero.');
+      return;
+    }
+    await sendTurn(`El canon mensual que decido cobrar es $${amount}`);
+    setManualCanon('');
   }
 
   function selectImages(files: FileList | null) {
@@ -475,7 +470,6 @@ export default function AsistenteIA() {
                     onChange={(event) => {
                       setSelectedProperty(event.target.value);
                       setConversation(null);
-                      setLocalMessages([]);
                       setToolResult(null);
                     }}
                   >
@@ -582,7 +576,8 @@ export default function AsistenteIA() {
                         <div><small>RANGO DE REFERENCIA</small><strong>{money(lastResult.precio_minimo ?? 0)} – {money(lastResult.precio_maximo ?? 0)}</strong></div>
                       </div>
                     )}
-                    {conversation.propiedad_id && (
+                    {conversation.propiedad_id &&
+                      lastResult.metadatos_calculo?.herramienta !== 'analisis-mercado' && (
                       <Button size="sm" onClick={() => void applyResult()}><Check size={15} /> Aplicar a mi propiedad</Button>
                     )}
                   </div>
@@ -607,7 +602,7 @@ export default function AsistenteIA() {
                       )}
                     </div>
                     {!isNeighborhoodValid && hasValue(propertyData.barrio) && (
-                      <p className="field-hint">El barrio extraído debe coincidir con uno del catálogo de RENTIO. Corrígelo escribiendo su nombre en el chat.</p>
+                      <p className="field-hint">Esta ubicación no aparece en el catálogo oficial. Se guardará con el nombre que indicaste como sector, sin clasificarla como barrio oficial.</p>
                     )}
                     {missingFields.length > 0 && (
                       <p className="field-hint">Falta completar: {missingFields.map((field) => fieldLabels[field] ?? field).join(', ')}. Responde en el chat para continuar.</p>
@@ -623,6 +618,56 @@ export default function AsistenteIA() {
                         {lastResult?.descripcion && <p className="generated-description">{lastResult.descripcion}</p>}
                       </>
                     )}
+
+                    {typeof propertyData.canon_sugerido === 'number' &&
+                      propertyData.canon_confirmado !== true &&
+                      propertyData.canon_rechazado !== true && (
+                        <div className="assistant-canon-choice">
+                          <p>
+                            Según los datos reales disponibles, la sugerencia de canon mensual es{' '}
+                            <strong>{money(propertyData.canon_sugerido)}</strong>. Tú decides si aceptarla.
+                          </p>
+                          <div className="modal-actions">
+                            <Button
+                              type="button"
+                              disabled={sending}
+                              onClick={() => void sendTurn('Acepto el canon sugerido')}
+                            >
+                              Aceptar sugerencia
+                            </Button>
+                            <Button
+                              type="button"
+                              variant="secondary"
+                              disabled={sending}
+                              onClick={() => void sendTurn('Rechazo la sugerencia de canon')}
+                            >
+                              Rechazar e indicar otro canon
+                            </Button>
+                          </div>
+                        </div>
+                      )}
+
+                    {propertyData.canon_rechazado === true &&
+                      propertyData.canon_confirmado !== true && (
+                        <form className="assistant-manual-price" onSubmit={(event) => void submitManualCanon(event)}>
+                          <label className="form-field">
+                            <span className="field-label">Canon mensual que decides cobrar (COP)</span>
+                            <input
+                              className="text-input"
+                              type="number"
+                              min="100000"
+                              max="99999999"
+                              step="1000"
+                              required
+                              value={manualCanon}
+                              onChange={(event) => setManualCanon(event.target.value)}
+                            />
+                          </label>
+                          <Button type="submit" disabled={sending || !manualCanon}>
+                            Confirmar mi canon
+                          </Button>
+                        </form>
+                      )}
 
                     <div className="assistant-photo-section">
                       <div className="form-section-title"><ImagePlus size={17} /> Fotografías del inmueble</div>

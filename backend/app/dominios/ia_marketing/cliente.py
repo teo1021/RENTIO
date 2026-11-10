@@ -101,11 +101,22 @@ def solicitar(endpoint, payload):
 
 
 def conversar(mensaje, datos_previos, historial=None):
+    from app.dominios.barrios.modelos import Barrio
+
     return solicitar(
         "/api/v1/ia/conversar",
         {
             "mensaje_usuario": mensaje,
             "datos_previos": datos_previos,
             "historial": historial or [],
+            "barrios_disponibles": [barrio.nombre for barrio in Barrio.query.order_by(Barrio.nombre).all()],
         },
+    )
+
+
+def generar_plantilla_contrato():
+    """Solicita una plantilla genérica, sin enviar datos de las partes ni del canon."""
+    return solicitar(
+        "/api/v1/ia/generar-contrato",
+        {"tipo_contrato": "arrendamiento_vivienda_urbana_colombia"},
     )

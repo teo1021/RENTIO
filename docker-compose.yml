@@ -10,6 +10,8 @@ services:
     volumes:
       - rentio_postgres:/var/lib/postgresql/data
       - ./backend/sql/create_database.sql:/docker-entrypoint-initdb.d/001-create-database.sql:ro
+      - ./backend/sql/seed_catalogo_barrios.sql:/docker-entrypoint-initdb.d/002-seed_catalogo_barrios.sql:ro
+      - ./backend/data/catalogos/barrios_medellin_geomedellin.csv:/docker-entrypoint-initdb.d/barrios_medellin_geomedellin.csv:ro
     healthcheck:
       test: ["CMD-SHELL", "pg_isready -U ${DB_USER:-rentio} -d ${DB_NAME:-rentio}"]
       interval: 5s

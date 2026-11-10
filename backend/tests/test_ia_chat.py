@@ -38,7 +38,7 @@ def test_chat_persiste_mensajes_y_resultado(client, propietario_auth, monkeypatc
     data = recuperado.get_json()["data"]
     assert len(data["mensajes"]) == 2
     assert len(data["resultados"]) == 1
-    assert data["estado"] == "lista"
+    assert data["estado"] == "recopilando"
 
 
 def test_chat_rechaza_mensaje_vacio(client, propietario_auth):
@@ -106,6 +106,7 @@ def test_confirmar_registro_guarda_propiedad_y_fotografias_en_una_operacion(
             "direccion": "Calle 30 # 80-25",
             "estrato": 4,
             "precio_mensual": 2_000_000,
+            "canon_confirmado": True,
             "area_m2": 85,
             "caracteristicas": ["Cocina integral"],
         },
@@ -141,6 +142,86 @@ def test_confirmar_registro_guarda_propiedad_y_fotografias_en_una_operacion(
     )
     assert repeated.status_code == 200
     assert Propiedad.query.count() == 1
+
+
+def test_confirmar_registro_guarda_ubicacion_manual_como_sector(
+    app, client, propietario_auth
+):
+    from app import db
+    from app.dominios.ia_marketing.modelos import ConversacionMarketing
+
+    conversacion = ConversacionMarketing(
+        propietario_id=propietario_auth["usuario"].id,
+        estado="lista",
+        datos_recopilados={
+            "barrio": "La Arboleda",
+            "barrio_comuna": "Comuna 15",
+            "tipo": "apartamento",
+            "habitaciones": 2,
+            "banos": 1,
+            "direccion": "Calle 10 # 50-20",
+            "estrato": 4,
+            "precio_mensual": 1_800_000,
+            "canon_confirmado": True,
+        },
+    )
+    db.session.add(conversacion)
+    db.session.commit()
+
+    response = client.post(
+        f"/api/v1/ia/conversaciones/{conversacion.id}/crear-propiedad",
+        headers=propietario_auth["headers"],
+        json={"titulo": "Apartamento en La Arboleda"},
+    )
+
+    assert response.status_code == 201
+    ubicacion = response.get_json()["data"]["barrio"]
+    assert ubicacion["nombre"] == "La Arboleda"
+    assert ubicacion["comuna"] == "Comuna 15"
+    assert ubicacion["tipo"] == "sector"
+
+
+def test_confirmar_registro_ignora_puntuacion_del_nombre_oficial(
+    app, client, propietario_auth
+):
+    from app import db
+    from app.dominios.barrios.modelos import Barrio
+    from app.dominios.ia_marketing.modelos import ConversacionMarketing
+
+    barrio = Barrio(
+        nombre="El Nogal-Los Almendros",
+        comuna="Comuna 16 - Belén",
+        zona="Suroccidental",
+    )
+    db.session.add(barrio)
+    db.session.flush()
+    conversacion = ConversacionMarketing(
+        propietario_id=propietario_auth["usuario"].id,
+        estado="lista",
+        datos_recopilados={
+            "barrio": "El Nogal Los Almendros",
+            "barrio_comuna": "Comuna 16",
+            "tipo": "apartamento",
+            "habitaciones": 2,
+            "banos": 1,
+            "direccion": "Calle 10 # 50-20",
+            "estrato": 4,
+            "precio_mensual": 1_800_000,
+            "canon_confirmado": True,
+        },
+    )
+    db.session.add(conversacion)
+    db.session.commit()
+
+    response = client.post(
+        f"/api/v1/ia/conversaciones/{conversacion.id}/crear-propiedad",
+        headers=propietario_auth["headers"],
+        json={"titulo": "Apartamento en El Nogal"},
+    )
+
+    assert response.status_code == 201
+    assert response.get_json()["data"]["barrio"]["id"] == barrio.id
+    assert response.get_json()["data"]["barrio"]["tipo"] == "barrio"
 
 
 def test_confirmar_registro_rechaza_datos_obligatorios_incompletos(

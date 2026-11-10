@@ -25,3 +25,7 @@ class CrearBarrioDTO(Schema):
         validate=validate.Length(min=2, max=100),
         error_messages={"required": "La zona es obligatoria."},
     )
+    tipo = fields.String(
+        load_default="barrio",
+        validate=validate.OneOf(["barrio", "vereda", "sector", "comuna"]),
+    )

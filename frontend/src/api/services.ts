@@ -42,7 +42,14 @@ export const rentalsApi = {
   mine: () => data<SolicitudArriendo[]>(api.get('/arriendos/mis-solicitudes')),
   received: () => data<SolicitudArriendo[]>(api.get('/arriendos/solicitudes-recibidas')),
   contracts: () => data<Contrato[]>(api.get('/arriendos/contratos')),
-  request: (propiedad_id: number, mensaje?: string) => data<SolicitudArriendo>(api.post('/arriendos/solicitar', { propiedad_id, mensaje })),
+  request: (payload: {
+    propiedad_id: number;
+    mensaje?: string;
+    arrendatario_nombre: string;
+    arrendatario_apellido: string;
+    arrendatario_cedula: string;
+    arrendatario_telefono: string;
+  }) => data<SolicitudArriendo>(api.post('/arriendos/solicitar', payload)),
   respond: (id: number, payload: { estado: 'aceptada' | 'rechazada'; fecha_inicio?: string; fecha_fin?: string; precio_acordado?: number }) =>
     data<SolicitudArriendo>(api.patch(`/arriendos/${id}/responder`, payload)),
 };

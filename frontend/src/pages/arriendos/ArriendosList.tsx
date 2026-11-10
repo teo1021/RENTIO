@@ -17,21 +17,9 @@ export default function ArriendosList() {
   const [success, setSuccess] = useState('');
   const [tab, setTab] = useState<'solicitudes' | 'contratos'>('solicitudes');
   const [selected, setSelected] = useState<SolicitudArriendo | null>(null);
+  const [selectedContract, setSelectedContract] = useState<Contrato | null>(null);
   const [decision, setDecision] = useState<'aceptada' | 'rechazada'>('aceptada');
-  // Los campos date usan la fecha local del navegador; toISOString() convertiría a UTC
-  // y podría adelantar o atrasar el día en zonas horarias como America/Bogota.
-  const toDateInput = (date: Date) => {
-    const year = date.getFullYear();
-    const month = String(date.getMonth() + 1).padStart(2, '0');
-    const day = String(date.getDate()).padStart(2, '0');
-    return `${year}-${month}-${day}`;
-  };
-  const currentDate = new Date();
-  const today = toDateInput(currentDate);
-  const nextYearDate = new Date(currentDate);
-  nextYearDate.setFullYear(nextYearDate.getFullYear() + 1);
-  const nextYear = toDateInput(nextYearDate);
-  const [contractForm, setContractForm] = useState({ fecha_inicio: today, fecha_fin: nextYear, precio_acordado: '' });
+  const [contractForm, setContractForm] = useState({ fecha_inicio: '', fecha_fin: '', precio_acordado: '' });
   const [saving, setSaving] = useState(false);
 
   async function loadData() {
@@ -47,7 +35,7 @@ export default function ArriendosList() {
   useEffect(() => { loadData(); }, [user?.rol]);
 
   function openDecision(request: SolicitudArriendo, value: 'aceptada' | 'rechazada') {
-    setSelected(request); setDecision(value); setContractForm({ fecha_inicio: today, fecha_fin: nextYear, precio_acordado: String(request.propiedad?.precio_mensual || '') }); setError('');
+    setSelected(request); setDecision(value); setContractForm({ fecha_inicio: '', fecha_fin: '', precio_acordado: '' }); setError('');
   }
 
   async function submitDecision(event: FormEvent) {
@@ -72,15 +60,17 @@ export default function ArriendosList() {
     <div className="rentals-summary"><div><span className="eyebrow">SOLICITUDES</span><strong>{requests.length}</strong><small>{pendingCount} pendientes de respuesta</small></div><div><span className="eyebrow">CONTRATOS</span><strong>{contracts.length}</strong><small>{contracts.filter((c) => c.estado === 'activo').length} activos</small></div><div className="rentals-summary-icon"><FileText size={34} strokeWidth={1.2} /></div></div>
     <div className="tabs-bar"><button className={tab === 'solicitudes' ? 'tab-active' : ''} onClick={() => setTab('solicitudes')}>Solicitudes <span>{requests.length}</span></button><button className={tab === 'contratos' ? 'tab-active' : ''} onClick={() => setTab('contratos')}>Contratos <span>{contracts.length}</span></button></div>
     {loading ? <LoadingState label="Consultando solicitudes y contratos..." /> : tab === 'solicitudes' ? requests.length === 0 ? <EmptyState title="Todavía no hay solicitudes" description={owner ? 'Cuando alguien solicite uno de tus inmuebles, podrás revisar su información aquí.' : 'Cuando solicites un inmueble, verás aquí el estado de tu proceso.'} /> : <div className="request-list">{requests.map((request) => <Panel className="request-card" key={request.id}><div className="request-card-top"><div><span className="eyebrow">SOLICITUD #{request.id}</span><h3>{request.propiedad?.titulo || `Propiedad #${request.propiedad_id}`}</h3><p className="request-subline">{request.propiedad?.direccion || 'Dirección no disponible'}</p></div><StatusBadge value={request.estado} /></div><div className="request-card-details"><div><span>{owner ? 'SOLICITANTE' : 'FECHA DE SOLICITUD'}</span><strong>{owner ? fullName(request.arrendatario) : dateLabel(request.fecha_solicitud)}</strong>{owner && <small>{request.arrendatario?.correo}</small>}</div><div><span>CANON MENSUAL</span><strong>{money(request.propiedad?.precio_mensual)}</strong></div><div><span>MENSAJE</span><strong className="request-message">{request.mensaje || 'Sin mensaje adicional.'}</strong></div></div>
+          {owner && request.datos_arrendatario && <div className="request-contract-note">Cédula: {request.datos_arrendatario.cedula || 'Pendiente'} · Celular: {request.datos_arrendatario.telefono || 'Pendiente'}</div>}
           {request.contrato && <div className="request-contract-note"><Check size={15} /> Contrato #{request.contrato.id} formalizado · {dateLabel(request.contrato.fecha_inicio)} al {dateLabel(request.contrato.fecha_fin)}</div>}
           {owner && request.estado === 'pendiente' && <div className="request-actions"><Button variant="secondary" onClick={() => openDecision(request, 'rechazada')}><X size={16} /> Rechazar</Button><Button onClick={() => openDecision(request, 'aceptada')}><Check size={16} /> Aceptar y crear contrato</Button></div>}
-        </Panel>)}</div> : contracts.length === 0 ? <EmptyState title="Aún no tienes contratos" description="Los contratos aparecerán aquí cuando una solicitud de arriendo sea aceptada y formalizada." /> : <div className="contracts-grid">{contracts.map((contract) => <Panel className="contract-card" key={contract.id}><div className="contract-card-head"><div className="contract-icon"><FileText size={20} /></div><StatusBadge value={contract.estado} /></div><span className="eyebrow">CONTRATO #{contract.id}</span><h3>Contrato de arrendamiento</h3><div className="contract-price">{money(contract.precio_acordado)}<small>/ mes</small></div><div className="contract-dates"><div><CalendarDays size={15} /><span>Inicio</span><strong>{dateLabel(contract.fecha_inicio)}</strong></div><div><CalendarDays size={15} /><span>Finalización</span><strong>{dateLabel(contract.fecha_fin)}</strong></div></div><p className="contract-foot">Solicitud relacionada #{contract.solicitud_id}</p></Panel>)}</div>}
+        </Panel>)}</div> : contracts.length === 0 ? <EmptyState title="Aún no tienes contratos" description="Los contratos aparecerán aquí cuando una solicitud de arriendo sea aceptada y formalizada." /> : <div className="contracts-grid">{contracts.map((contract) => <Panel className="contract-card" key={contract.id}><div className="contract-card-head"><div className="contract-icon"><FileText size={20} /></div><StatusBadge value={contract.estado} /></div><span className="eyebrow">CONTRATO #{contract.id}</span><h3>Contrato de arrendamiento</h3><div className="contract-price">{money(contract.precio_acordado)}<small>/ mes</small></div><div className="contract-dates"><div><CalendarDays size={15} /><span>Inicio</span><strong>{dateLabel(contract.fecha_inicio)}</strong></div><div><CalendarDays size={15} /><span>Finalización</span><strong>{dateLabel(contract.fecha_fin)}</strong></div></div><p className="contract-foot">Solicitud relacionada #{contract.solicitud_id}</p>{contract.contenido && <Button variant="secondary" size="sm" onClick={() => setSelectedContract(contract)}>Ver contrato generado</Button>}</Panel>)}</div>}
 
     {selected && <Modal title={decision === 'aceptada' ? 'Aceptar solicitud y formalizar' : 'Rechazar solicitud'} onClose={() => setSelected(null)}>
-      <form className="modal-form" onSubmit={submitDecision}>{error && <Alert>{error}</Alert>}<p className="modal-intro">{decision === 'aceptada' ? `Al aceptar la solicitud de ${fullName(selected.arrendatario)}, el backend creará el contrato y cambiará el estado de la propiedad a arrendada.` : `Confirma que deseas rechazar la solicitud para ${selected.propiedad?.titulo || 'esta propiedad'}.`}</p>
-        {decision === 'aceptada' && <><div className="form-grid-two"><Field label="Fecha de inicio"><input className="text-input" type="date" required value={contractForm.fecha_inicio} onChange={(e) => setContractForm((v) => ({ ...v, fecha_inicio: e.target.value }))} /></Field><Field label="Fecha de finalización"><input className="text-input" type="date" required min={contractForm.fecha_inicio} value={contractForm.fecha_fin} onChange={(e) => setContractForm((v) => ({ ...v, fecha_fin: e.target.value }))} /></Field></div><Field label="Precio mensual acordado (COP)"><input className="text-input" type="number" min="0" step="1000" value={contractForm.precio_acordado} onChange={(e) => setContractForm((v) => ({ ...v, precio_acordado: e.target.value }))} /></Field></>}
+      <form className="modal-form" onSubmit={submitDecision}>{error && <Alert>{error}</Alert>}<p className="modal-intro">{decision === 'aceptada' ? `Indica los términos que tú acuerdas con ${selected.datos_arrendatario?.nombre || fullName(selected.arrendatario)}. La IA redactará un borrador con esos datos; no determinará el canon.` : `Confirma que deseas rechazar la solicitud para ${selected.propiedad?.titulo || 'esta propiedad'}.`}</p>
+        {decision === 'aceptada' && <><div className="form-grid-two"><Field label="Fecha de inicio"><input className="text-input" type="date" required value={contractForm.fecha_inicio} onChange={(e) => setContractForm((v) => ({ ...v, fecha_inicio: e.target.value }))} /></Field><Field label="Fecha de finalización"><input className="text-input" type="date" required min={contractForm.fecha_inicio || undefined} value={contractForm.fecha_fin} onChange={(e) => setContractForm((v) => ({ ...v, fecha_fin: e.target.value }))} /></Field></div><Field label="Canon mensual acordado por ti (COP)"><input className="text-input" type="number" required min="1" step="1000" value={contractForm.precio_acordado} onChange={(e) => setContractForm((v) => ({ ...v, precio_acordado: e.target.value }))} /></Field><p className="field-hint">Este canon lo defines tú como arrendador; no se copia automáticamente de la propiedad ni lo decide la IA.</p></>}
         <div className="modal-actions"><Button type="button" variant="secondary" onClick={() => setSelected(null)}>Cancelar</Button><Button type="submit" variant={decision === 'rechazada' ? 'danger' : 'primary'} disabled={saving}>{saving ? 'Procesando...' : decision === 'aceptada' ? 'Confirmar y crear contrato' : 'Confirmar rechazo'}</Button></div>
       </form>
     </Modal>}
+    {selectedContract && <Modal title={`Borrador de contrato #${selectedContract.id}`} onClose={() => setSelectedContract(null)}><div className="contract-document"><p className="field-hint">Documento generado con IA. Revísalo con asesoría jurídica antes de firmarlo.</p><pre>{selectedContract.contenido}</pre></div><div className="modal-actions"><Button type="button" onClick={() => setSelectedContract(null)}>Cerrar</Button></div></Modal>}
   </div>;
 }

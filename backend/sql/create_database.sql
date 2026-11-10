@@ -2,7 +2,10 @@
 BEGIN;
 
 CREATE TYPE rol_usuario AS ENUM ('arrendatario', 'propietario', 'admin');
-CREATE TYPE tipo_propiedad AS ENUM ('casa', 'apartamento', 'habitacion', 'finca');
+CREATE TYPE tipo_propiedad AS ENUM (
+    'casa', 'apartamento', 'habitacion', 'apartaestudio',
+    'local_comercial', 'oficina', 'bodega', 'finca'
+);
 CREATE TYPE estado_propiedad AS ENUM ('disponible', 'arrendada', 'inactiva');
 CREATE TYPE estado_solicitud AS ENUM ('pendiente', 'aceptada', 'rechazada');
 CREATE TYPE estado_contrato AS ENUM ('activo', 'finalizado', 'cancelado');
@@ -26,7 +29,8 @@ CREATE TABLE barrios (
     id SERIAL PRIMARY KEY,
     nombre VARCHAR(100) NOT NULL,
     comuna VARCHAR(100) NOT NULL,
-    zona VARCHAR(100) NOT NULL
+    zona VARCHAR(100) NOT NULL,
+    tipo VARCHAR(20) NOT NULL DEFAULT 'barrio'
 );
 CREATE INDEX ix_barrios_nombre ON barrios(nombre);
 CREATE TABLE caracteristicas (
@@ -68,6 +72,10 @@ CREATE TABLE solicitudes_arriendo (
     propiedad_id INTEGER NOT NULL REFERENCES propiedades(id) ON DELETE CASCADE,
     arrendatario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     mensaje TEXT,
+    arrendatario_nombre VARCHAR(100),
+    arrendatario_apellido VARCHAR(100),
+    arrendatario_cedula VARCHAR(20),
+    arrendatario_telefono VARCHAR(20),
     estado estado_solicitud NOT NULL DEFAULT 'pendiente',
     fecha_solicitud TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
@@ -77,6 +85,7 @@ CREATE TABLE contratos_arriendo (
     fecha_inicio DATE NOT NULL,
     fecha_fin DATE NOT NULL,
     precio_acordado NUMERIC(10,2) NOT NULL,
+    contenido TEXT,
     estado estado_contrato NOT NULL DEFAULT 'activo',
     fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
 );
