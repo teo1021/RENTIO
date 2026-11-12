@@ -51,6 +51,28 @@
 
 .stats-grid-four{grid-template-columns:repeat(4,minmax(0,1fr))}
 @media(max-width:1180px){.stats-grid-four{grid-template-columns:repeat(2,minmax(0,1fr))}}
+
+/* Property photos use fixed viewports so different source sizes never stretch the layout. */
+.property-image-carousel{width:100%;min-width:0;overflow:hidden;border-radius:12px 12px 0 0;background:#f1f4f7}
+.property-image-viewport{position:relative;width:100%;overflow:hidden;background:#edf1f4}
+.property-image-carousel-card .property-image-viewport{height:190px}
+.property-image-carousel-detail{border-radius:10px}
+.property-image-carousel-detail .property-image-viewport{height:clamp(220px,45vh,420px)}
+.property-carousel-image{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;opacity:0;transition:opacity .35s ease}
+.property-carousel-image-active{opacity:1}
+.property-image-carousel-detail .property-carousel-image{object-fit:contain}
+.property-image-empty{display:flex;width:100%;height:100%;align-items:center;justify-content:center;color:rgba(255,255,255,.8)}
+.property-image-empty.property-visual{height:100%}
+.property-carousel-controls{display:flex;min-height:32px;align-items:center;justify-content:center;gap:10px;padding:3px 8px;background:#fff;color:#8290a1;font-size:9px}
+.property-carousel-controls>button{display:grid;width:25px;height:25px;place-items:center;border:0;border-radius:6px;background:transparent;color:#718095;cursor:pointer}
+.property-carousel-controls>button:hover{background:#edf8f6;color:#168f83}
+.property-carousel-dots{display:flex;align-items:center;justify-content:center;gap:5px}
+.property-carousel-dots button{width:6px;height:6px;padding:0;border:0;border-radius:50%;background:#cbd4de;cursor:pointer}
+.property-carousel-dots button.property-carousel-dot-active{width:16px;border-radius:5px;background:#159b8b}
+.property-card-classification{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-bottom:10px}
+.property-type-label{display:inline-flex;align-items:center;padding:5px 8px;border-radius:999px;background:#f0f5f8;color:#617187;font-size:9px;font-weight:700;text-transform:capitalize}
+.property-detail-classification{display:flex;align-items:center;gap:8px;flex-shrink:0}
+@media(max-width:600px){.property-image-carousel-card .property-image-viewport{height:210px}.property-image-carousel-detail .property-image-viewport{height:clamp(200px,38vh,340px)}.property-detail-classification{flex-direction:column;align-items:flex-end}}
 @media(max-width:400px){.stats-grid-four{grid-template-columns:1fr}}
 
-.property-card-heading{display:flex;align-items:flex-start;justify-content:space-between;gap:8px}.property-card-heading h3{min-width:0}.property-card-heading .status-badge{flex-shrink:0}.property-description-preview{display:-webkit-box;overflow:hidden;-webkit-box-orient:vertical;-webkit-line-clamp:3;color:#7a8798;font-size:10px;line-height:1.55;margin:5px 0 0}
+.request-data-summary{margin:12px 0;padding:12px 14px;background:#f5f9fb;border-radius:9px;border-left:3px solid #7bccc3}.request-data-summary .eyebrow{color:#5a9e96;margin-bottom:8px;display:block}.request-data-summary p{margin:3px 0;font-size:10px;color:#5b6e84}.request-data-summary strong{color:#2d3f54}.contract-labor{display:flex;align-items:center;gap:7px;color:#637181;font-size:9px;margin:10px 0;padding:8px 10px;background:#f8fafb;border-radius:7px}.contract-labor svg{color:#9bb0bf;flex-shrink:0}

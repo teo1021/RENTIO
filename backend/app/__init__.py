@@ -41,10 +41,13 @@ def crear_app(config_class=None):
     # ── Extensiones ──────────────────────────────────────────────────────
     db.init_app(app)
     migrate.init_app(app, db)
+    cors_origins = app.config.get("CORS_ALLOWED_ORIGINS", "*")
+    if isinstance(cors_origins, str) and cors_origins != "*":
+        cors_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
     CORS(
         app,
         resources={
-            r"/api/*": {"origins": app.config.get("CORS_ALLOWED_ORIGINS", "*")},
+            r"/api/*": {"origins": cors_origins},
             r"/health": {"origins": "*"},
         },
     )

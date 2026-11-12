@@ -31,14 +31,26 @@ export function StatCard({ label, value, detail, icon: Icon, tone = 'blue' }: { 
   );
 }
 
-export function StatusBadge({ value }: { value: string }) {
-  const labels: Record<string, string> = { propietario: 'Propietario', arrendatario: 'Arrendatario', admin: 'Administrador', disponible: 'Disponible', arrendada: 'Arrendada', inactiva: 'Inactiva', pendiente: 'Pendiente', aceptada: 'Aceptada', rechazada: 'Rechazada', activo: 'Activo', finalizado: 'Finalizado', cancelado: 'Cancelado', recopilando: 'Recopilando', lista: 'Lista', generada: 'Generada', cerrada: 'Cerrada' };
+export function StatusBadge({ value, label }: { value: string; label?: string }) {
+  const labels: Record<string, string> = {
+    propietario: 'Propietario', arrendatario: 'Arrendatario', admin: 'Administrador',
+    disponible: 'Disponible', arrendada: 'Arrendada', inactiva: 'Inactiva',
+    pendiente: 'Pendiente', pendiente_visita: 'Esperando visita',
+    visita_programada: 'Visita programada', contrato_generado: 'Contrato generado',
+    aceptada: 'Aceptada', rechazada: 'Rechazada',
+    activo: 'Activo', finalizado: 'Finalizado', cancelado: 'Cancelado',
+    recopilando: 'Recopilando', lista: 'Lista', generada: 'Generada', cerrada: 'Cerrada',
+  };
   const styles: Record<string, string> = {
-    disponible: 'status-green', pendiente: 'status-amber', aceptada: 'status-green', activa: 'status-green', activo: 'status-green',
-    arrendada: 'status-blue', rechazada: 'status-red', inactiva: 'status-gray', finalizado: 'status-gray', cancelado: 'status-red',
+    disponible: 'status-green', pendiente: 'status-amber', pendiente_visita: 'status-amber',
+    visita_programada: 'status-blue', contrato_generado: 'status-green',
+    aceptada: 'status-green', activa: 'status-green', activo: 'status-green',
+    arrendada: 'status-blue', rechazada: 'status-red', inactiva: 'status-gray',
+    finalizado: 'status-gray', cancelado: 'status-red',
     recopilando: 'status-blue', lista: 'status-green', generada: 'status-violet', cerrada: 'status-gray',
   };
-  return <span className={`status-badge ${styles[value?.toLowerCase()] || 'status-gray'}`}>{labels[value?.toLowerCase()] || value || 'Sin estado'}</span>;
+  const key = value?.toLowerCase();
+  return <span className={`status-badge ${styles[key] || 'status-gray'}`}>{label || labels[key] || value || 'Sin estado'}</span>;
 }
 
 export function LoadingState({ label = 'Cargando información...' }: { label?: string }) {

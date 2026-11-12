@@ -44,13 +44,20 @@ class SolicitudRepositorio:
         )
 
     @staticmethod
-    def obtener_pendiente(propiedad_id, arrendatario_id):
-        """Verifica si ya existe una solicitud pendiente del arrendatario para la propiedad."""
-        return SolicitudArriendo.query.filter_by(
-            propiedad_id=propiedad_id,
-            arrendatario_id=arrendatario_id,
-            estado="pendiente",
+    def obtener_activa(propiedad_id, arrendatario_id):
+        """Verifica si ya existe una solicitud activa (no rechazada) del arrendatario para la propiedad."""
+        return SolicitudArriendo.query.filter(
+            SolicitudArriendo.propiedad_id == propiedad_id,
+            SolicitudArriendo.arrendatario_id == arrendatario_id,
+            SolicitudArriendo.estado.in_(
+                ["pendiente", "pendiente_visita", "visita_programada"]
+            ),
         ).first()
+
+    @staticmethod
+    def obtener_pendiente(propiedad_id, arrendatario_id):
+        """Alias de obtener_activa para retrocompatibilidad."""
+        return SolicitudRepositorio.obtener_activa(propiedad_id, arrendatario_id)
 
 
 class ContratoRepositorio:
@@ -67,6 +74,24 @@ class ContratoRepositorio:
     def obtener_por_id(contrato_id):
         """Obtiene un contrato por su ID."""
         return db.session.get(ContratoArriendo, contrato_id)
+
+    @staticmethod
+    def siguiente_numero():
+        """Genera el siguiente número de contrato secuencial."""
+        ultimo = (
+            ContratoArriendo.query
+            .filter(ContratoArriendo.numero_contrato.isnot(None))
+            .order_by(ContratoArriendo.id.desc())
+            .first()
+        )
+        if ultimo and ultimo.numero_contrato:
+            try:
+                secuencia = int(ultimo.numero_contrato.split("-")[-1]) + 1
+            except (ValueError, IndexError):
+                secuencia = ultimo.id + 1
+        else:
+            secuencia = 1
+        return f"RNT-{secuencia:06d}"
 
     @staticmethod
     def obtener_por_usuario(usuario_id):

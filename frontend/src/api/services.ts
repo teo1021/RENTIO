@@ -45,11 +45,25 @@ export const rentalsApi = {
   request: (payload: {
     propiedad_id: number;
     mensaje?: string;
-    arrendatario_nombre: string;
-    arrendatario_apellido: string;
-    arrendatario_cedula: string;
-    arrendatario_telefono: string;
+    cedula_arrendatario: string;
+    telefono_arrendatario: string;
+    fecha_visita_propuesta: string;
   }) => data<SolicitudArriendo>(api.post('/arriendos/solicitar', payload)),
+  responderVisita: (id: number, payload: { estado: 'visita_programada' | 'rechazada'; fecha_visita_confirmada?: string }) =>
+    data<SolicitudArriendo>(api.patch(`/arriendos/${id}/responder-visita`, payload)),
+  generarContrato: (id: number, payload: {
+    fecha_inicio: string;
+    fecha_fin: string;
+    precio_acordado?: number;
+    trabaja?: boolean;
+    empresa?: string;
+    cargo?: string;
+    ingreso_mensual?: number;
+    fiador_nombre?: string;
+    fiador_cedula?: string;
+    fiador_telefono?: string;
+    clausulas_adicionales?: string;
+  }) => data<SolicitudArriendo>(api.post(`/arriendos/${id}/generar-contrato`, payload)),
   respond: (id: number, payload: { estado: 'aceptada' | 'rechazada'; fecha_inicio?: string; fecha_fin?: string; precio_acordado?: number }) =>
     data<SolicitudArriendo>(api.patch(`/arriendos/${id}/responder`, payload)),
 };

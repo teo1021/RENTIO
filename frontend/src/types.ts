@@ -22,7 +22,6 @@ export interface Barrio {
   nombre: string;
   comuna: string;
   zona: string;
-  tipo: 'barrio' | 'vereda' | 'sector' | 'comuna';
 }
 
 export interface Caracteristica {
@@ -32,15 +31,7 @@ export interface Caracteristica {
 }
 
 export type EstadoPropiedad = 'disponible' | 'arrendada' | 'inactiva';
-export type TipoPropiedad =
-  | 'casa'
-  | 'apartamento'
-  | 'habitacion'
-  | 'apartaestudio'
-  | 'local_comercial'
-  | 'oficina'
-  | 'bodega'
-  | 'finca';
+export type TipoPropiedad = 'casa' | 'apartamento' | 'habitacion' | 'finca';
 
 export interface ImagenPropiedad {
   id: number;
@@ -78,27 +69,33 @@ export interface SolicitudArriendo {
     correo: string;
     perfil?: Perfil | null;
   } | null;
-  datos_arrendatario?: {
-    nombre?: string | null;
-    apellido?: string | null;
-    cedula?: string | null;
-    telefono?: string | null;
-  };
   mensaje?: string | null;
-  estado: 'pendiente' | 'aceptada' | 'rechazada';
+  cedula_arrendatario?: string | null;
+  telefono_arrendatario?: string | null;
+  fecha_visita_propuesta?: string | null;
+  fecha_visita_confirmada?: string | null;
+  estado: 'pendiente' | 'pendiente_visita' | 'visita_programada' | 'contrato_generado' | 'aceptada' | 'rechazada';
   fecha_solicitud?: string;
   contrato?: Contrato | null;
 }
 
 export interface Contrato {
   id: number;
+  numero_contrato?: string | null;
   solicitud_id: number;
   fecha_inicio: string;
   fecha_fin: string;
   precio_acordado: number;
-  contenido?: string | null;
   estado: 'activo' | 'finalizado' | 'cancelado';
   fecha_creacion?: string;
+  trabaja?: boolean | null;
+  empresa?: string | null;
+  cargo?: string | null;
+  ingreso_mensual?: number | null;
+  fiador_nombre?: string | null;
+  fiador_cedula?: string | null;
+  fiador_telefono?: string | null;
+  clausulas_adicionales?: string | null;
 }
 
 export interface MensajeMarketing {

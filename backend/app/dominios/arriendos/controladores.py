@@ -1,17 +1,26 @@
 """
 Controladores del dominio de arriendos.
 
-Define el blueprint `arriendos_bp` para solicitudes y contratos.
+Define el blueprint `arriendos_bp` para el flujo completo:
+  solicitud con datos personales → responder visita → generar contrato.
 """
 
 from flask import Blueprint, jsonify, request
 from marshmallow import ValidationError
 
-from app import db
-from app.dominios.arriendos.modelos import SolicitudArriendo
-from app.dominios.ia_marketing.cliente import ServicioIAError, generar_plantilla_contrato
-from app.dominios.arriendos.dtos import ResponderSolicitudDTO, SolicitarArriendoDTO
-from app.dominios.usuarios.repositorios import UsuarioRepositorio
+from app.dominios.arriendos.dtos import (
+    GenerarContratoDTO,
+    ResponderSolicitudDTO,
+    ResponderVisitaDTO,
+    SolicitarArriendoDTO,
+)
+from app.dominios.arriendos.servicios import (
+    EstadoSolicitudInvalidoError,
+    PermisoArriendoError,
+    SolicitudDuplicadaError,
+    SolicitudNoEncontradaError,
+)
+from app.dominios.propiedades.servicios import PropiedadNoEncontradaError
 from app.seguridad import requiere_propietario, requiere_token
 
 # ── Servicio inyectado por el factory ──────────────────────────────────
@@ -21,37 +30,43 @@ servicio = None
 arriendos_bp = Blueprint("arriendos", __name__)
 
 
+# ── Helpers ────────────────────────────────────────────────────────────
+
+def _error(message, details=None, code=400):
+    body = {"success": False, "error": {"message": message}}
+    if details:
+        body["error"]["details"] = details
+    return jsonify(body), code
+
+
+def _ok(data, message="", code=200):
+    return jsonify({"success": True, "message": message, "data": data}), code
+
+
+# ── Endpoints ──────────────────────────────────────────────────────────
+
+
 @arriendos_bp.route("/solicitar", methods=["POST"])
 @requiere_token
 def solicitar(usuario_id=None):
-    """Crea una nueva solicitud de arriendo."""
+    """Crea una nueva solicitud de arriendo con datos personales y fecha de visita."""
     try:
         datos = SolicitarArriendoDTO().load(request.get_json() or {})
     except ValidationError as err:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": {
-                        "message": "Datos de entrada inválidos.",
-                        "details": err.messages,
-                    },
-                }
-            ),
-            400,
-        )
+        return _error("Datos de entrada inválidos.", err.messages)
 
-    solicitud = servicio.solicitar(datos, usuario_id)
-    return (
-        jsonify(
-            {
-                "success": True,
-                "message": "Solicitud de arriendo enviada con éxito.",
-                "data": solicitud.to_dict(),
-            }
-        ),
-        201,
-    )
+    try:
+        solicitud = servicio.solicitar(datos, usuario_id)
+    except PropiedadNoEncontradaError as exc:
+        return _error(str(exc), code=404)
+    except PermisoArriendoError as exc:
+        return _error(str(exc), code=403)
+    except EstadoSolicitudInvalidoError as exc:
+        return _error(str(exc), code=409)
+    except SolicitudDuplicadaError as exc:
+        return _error(str(exc), code=409)
+
+    return _ok(solicitud.to_dict(), "Solicitud de arriendo enviada con éxito.", 201)
 
 
 @arriendos_bp.route("/mis-solicitudes", methods=["GET"])
@@ -59,16 +74,7 @@ def solicitar(usuario_id=None):
 def mis_solicitudes(usuario_id=None):
     """Lista las solicitudes de arriendo enviadas por el usuario actual."""
     solicitudes = servicio.listar_mis_solicitudes(usuario_id)
-    return (
-        jsonify(
-            {
-                "success": True,
-                "message": "Solicitudes obtenidas con éxito.",
-                "data": [s.to_dict() for s in solicitudes],
-            }
-        ),
-        200,
-    )
+    return _ok([s.to_dict() for s in solicitudes], "Solicitudes obtenidas con éxito.")
 
 
 @arriendos_bp.route("/solicitudes-recibidas", methods=["GET"])
@@ -76,128 +82,75 @@ def mis_solicitudes(usuario_id=None):
 def solicitudes_recibidas(usuario_id=None):
     """Lista las solicitudes recibidas para las propiedades del propietario."""
     solicitudes = servicio.listar_solicitudes_recibidas(usuario_id)
-    return (
-        jsonify(
-            {
-                "success": True,
-                "message": "Solicitudes recibidas obtenidas con éxito.",
-                "data": [s.to_dict() for s in solicitudes],
-            }
-        ),
-        200,
+    return _ok([s.to_dict() for s in solicitudes], "Solicitudes recibidas obtenidas con éxito.")
+
+
+@arriendos_bp.route("/<int:id>/responder-visita", methods=["PATCH"])
+@requiere_token
+def responder_visita(id, usuario_id=None):
+    """El propietario acepta o rechaza la solicitud de visita."""
+    try:
+        datos = ResponderVisitaDTO().load(request.get_json() or {})
+    except ValidationError as err:
+        return _error("Datos de entrada inválidos.", err.messages)
+
+    try:
+        solicitud = servicio.responder_visita(id, datos, usuario_id)
+    except SolicitudNoEncontradaError as exc:
+        return _error(str(exc), code=404)
+    except PermisoArriendoError as exc:
+        return _error(str(exc), code=403)
+    except EstadoSolicitudInvalidoError as exc:
+        return _error(str(exc), code=409)
+
+    accion = "aceptada" if datos["estado"] == "visita_programada" else "rechazada"
+    return _ok(solicitud.to_dict(), f"Visita {accion} con éxito.")
+
+
+@arriendos_bp.route("/<int:id>/generar-contrato", methods=["POST"])
+@requiere_propietario
+def generar_contrato(id, usuario_id=None):
+    """El propietario genera el contrato formal después de la visita."""
+    try:
+        datos = GenerarContratoDTO().load(request.get_json() or {})
+    except ValidationError as err:
+        return _error("Datos de entrada inválidos.", err.messages)
+
+    try:
+        solicitud = servicio.generar_contrato(id, datos, usuario_id)
+    except SolicitudNoEncontradaError as exc:
+        return _error(str(exc), code=404)
+    except PermisoArriendoError as exc:
+        return _error(str(exc), code=403)
+    except EstadoSolicitudInvalidoError as exc:
+        return _error(str(exc), code=409)
+
+    return _ok(
+        solicitud.to_dict(),
+        f"Contrato {solicitud.contrato.numero_contrato} generado con éxito.",
+        201,
     )
 
 
 @arriendos_bp.route("/<int:id>/responder", methods=["PATCH"])
 @requiere_token
 def responder(id, usuario_id=None):
-    """Acepta o rechaza una solicitud de arriendo recibida."""
+    """Legado: acepta o rechaza una solicitud (compatibilidad con versiones anteriores)."""
     try:
         datos = ResponderSolicitudDTO().load(request.get_json() or {})
     except ValidationError as err:
-        return (
-            jsonify(
-                {
-                    "success": False,
-                    "error": {
-                        "message": "Datos de entrada inválidos.",
-                        "details": err.messages,
-                    },
-                }
-            ),
-            400,
-        )
+        return _error("Datos de entrada inválidos.", err.messages)
 
-    if datos["estado"] == "aceptada":
-        fecha_inicio = datos.get("fecha_inicio")
-        fecha_fin = datos.get("fecha_fin")
-        precio_acordado = datos.get("precio_acordado")
-        if not fecha_inicio or not fecha_fin or not precio_acordado:
-            return jsonify({
-                "success": False,
-                "error": {"message": "Para crear el contrato debes indicar las fechas y el canon mensual acordado por el propietario."},
-            }), 400
-        if fecha_fin <= fecha_inicio:
-            return jsonify({
-                "success": False,
-                "error": {"message": "La fecha de finalización debe ser posterior a la fecha de inicio."},
-            }), 400
+    try:
+        solicitud = servicio.responder_solicitud(id, datos, usuario_id)
+    except SolicitudNoEncontradaError as exc:
+        return _error(str(exc), code=404)
+    except PermisoArriendoError as exc:
+        return _error(str(exc), code=403)
+    except EstadoSolicitudInvalidoError as exc:
+        return _error(str(exc), code=409)
 
-        solicitud = db.session.get(SolicitudArriendo, id)
-        if solicitud is None:
-            return jsonify({"success": False, "error": {"message": "Solicitud no encontrada."}}), 404
-        usuario = UsuarioRepositorio.obtener_por_id(usuario_id)
-        if solicitud.propiedad.propietario_id != usuario_id and not (
-            usuario and usuario.rol == "admin"
-        ):
-            return jsonify({
-                "success": False,
-                "error": {"message": "No tienes permisos para responder esta solicitud."},
-            }), 403
-        if solicitud.estado != "pendiente":
-            return jsonify({
-                "success": False,
-                "error": {"message": "La solicitud ya fue respondida previamente."},
-            }), 409
-        if not all((
-            solicitud.arrendatario_nombre,
-            solicitud.arrendatario_apellido,
-            solicitud.arrendatario_cedula,
-            solicitud.arrendatario_telefono,
-        )):
-            return jsonify({
-                "success": False,
-                "error": {"message": "La solicitud no tiene los datos obligatorios del inquilino. Pídele que complete su información y vuelva a solicitar."},
-            }), 400
-
-        perfil_propietario = solicitud.propiedad.propietario.perfil
-        if not perfil_propietario or not perfil_propietario.nombre or not perfil_propietario.apellido:
-            return jsonify({
-                "success": False,
-                "error": {"message": "Completa tu nombre y apellido en el perfil antes de generar el contrato."},
-            }), 400
-
-        try:
-            plantilla = generar_plantilla_contrato()["plantilla"]
-        except ServicioIAError as exc:
-            return jsonify({"success": False, "error": {"message": str(exc)}}), exc.status_code
-
-        reemplazos = {
-            "ARRENDADOR_NOMBRE": f"{perfil_propietario.nombre} {perfil_propietario.apellido}",
-            "ARRENDATARIO_NOMBRE": f"{solicitud.arrendatario_nombre} {solicitud.arrendatario_apellido}",
-            "ARRENDATARIO_CEDULA": solicitud.arrendatario_cedula,
-            "ARRENDATARIO_TELEFONO": solicitud.arrendatario_telefono,
-            "INMUEBLE_DIRECCION": solicitud.propiedad.direccion,
-            "INMUEBLE_BARRIO": solicitud.propiedad.barrio.nombre if solicitud.propiedad.barrio else "No especificado",
-            "FECHA_INICIO": fecha_inicio.strftime("%d/%m/%Y"),
-            "FECHA_FIN": fecha_fin.strftime("%d/%m/%Y"),
-            "CANON_MENSUAL": f"${precio_acordado:,.0f} COP",
-        }
-        import re
-
-        contenido = re.sub(
-            r"\{\{([A-Z_]+)\}\}",
-            lambda match: reemplazos.get(match.group(1), match.group(0)),
-            plantilla,
-        )
-        if any(f"{{{{{clave}}}}}" in contenido for clave in reemplazos):
-            return jsonify({
-                "success": False,
-                "error": {"message": "La IA no generó una plantilla contractual completa. Inténtalo nuevamente."},
-            }), 502
-        datos["contenido"] = contenido
-
-    solicitud = servicio.responder_solicitud(id, datos, usuario_id)
-    return (
-        jsonify(
-            {
-                "success": True,
-                "message": f"Solicitud {datos['estado']} con éxito.",
-                "data": solicitud.to_dict(),
-            }
-        ),
-        200,
-    )
+    return _ok(solicitud.to_dict(), f"Solicitud {datos['estado']} con éxito.")
 
 
 @arriendos_bp.route("/contratos", methods=["GET"])
@@ -205,13 +158,4 @@ def responder(id, usuario_id=None):
 def listar_contratos(usuario_id=None):
     """Lista los contratos de arriendo asociados al usuario."""
     contratos = servicio.listar_contratos(usuario_id)
-    return (
-        jsonify(
-            {
-                "success": True,
-                "message": "Contratos obtenidos con éxito.",
-                "data": [c.to_dict() for c in contratos],
-            }
-        ),
-        200,
-    )
+    return _ok([c.to_dict() for c in contratos], "Contratos obtenidos con éxito.")

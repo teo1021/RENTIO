@@ -7,6 +7,8 @@ import {
   Building2,
   Check,
   ChevronDown,
+  ChevronLeft,
+  ChevronRight,
   Edit3,
   Filter,
   MapPin,
@@ -57,17 +59,6 @@ type PropertyForm = {
   barrio_id: string;
 };
 
-const typeLabels: Record<TipoPropiedad, string> = {
-  casa: 'Casa',
-  apartamento: 'Apartamento',
-  habitacion: 'Habitación',
-  apartaestudio: 'Apartaestudio',
-  local_comercial: 'Local comercial',
-  oficina: 'Oficina',
-  bodega: 'Bodega',
-  finca: 'Finca',
-};
-
 const blankForm: PropertyForm = {
   titulo: '',
   descripcion: '',
@@ -112,21 +103,16 @@ export default function PropiedadesList() {
   const [selectedFeatures, setSelectedFeatures] = useState<number[]>([]);
 
   const [requestMessage, setRequestMessage] = useState('');
-  const [applicant, setApplicant] = useState({
-    nombre: user?.perfil?.nombre || '',
-    apellido: user?.perfil?.apellido || '',
-    cedula: user?.perfil?.cedula || '',
-    telefono: user?.perfil?.telefono || '',
-  });
+  const [requestCedula, setRequestCedula] = useState('');
+  const [requestTelefono, setRequestTelefono] = useState('');
+  const [requestFechaVisita, setRequestFechaVisita] = useState('');
 
-  useEffect(() => {
-    setApplicant({
-      nombre: user?.perfil?.nombre || '',
-      apellido: user?.perfil?.apellido || '',
-      cedula: user?.perfil?.cedula || '',
-      telefono: user?.perfil?.telefono || '',
-    });
-  }, [user?.id, user?.perfil]);
+  // Fecha mínima para proponer visita (mañana)
+  const tomorrowDate = (() => {
+    const d = new Date(); d.setDate(d.getDate() + 1);
+    return `${d.getFullYear()}-${String(d.getMonth() + 1).padStart(2, '0')}-${String(d.getDate()).padStart(2, '0')}`;
+  })();
+
   const [selectedImages, setSelectedImages] = useState<File[]>([]);
   const [imagePreviews, setImagePreviews] = useState<string[]>([]);
 
@@ -379,6 +365,9 @@ export default function PropiedadesList() {
     event.preventDefault();
 
     if (!selected) return;
+    if (!requestCedula.trim()) { setError('La cédula es obligatoria.'); return; }
+    if (!requestTelefono.trim()) { setError('El número de celular es obligatorio.'); return; }
+    if (!requestFechaVisita) { setError('Debes proponer una fecha para la visita.'); return; }
 
     setSaving(true);
     setError('');
@@ -387,17 +376,19 @@ export default function PropiedadesList() {
       await rentalsApi.request({
         propiedad_id: selected.id,
         mensaje: requestMessage.trim() || undefined,
-        arrendatario_nombre: applicant.nombre.trim(),
-        arrendatario_apellido: applicant.apellido.trim(),
-        arrendatario_cedula: applicant.cedula.trim(),
-        arrendatario_telefono: applicant.telefono.trim(),
+        cedula_arrendatario: requestCedula.trim(),
+        telefono_arrendatario: requestTelefono.trim(),
+        fecha_visita_propuesta: requestFechaVisita,
       });
 
       setModal(null);
       setRequestMessage('');
+      setRequestCedula('');
+      setRequestTelefono('');
+      setRequestFechaVisita('');
 
       setSuccess(
-        'Tu solicitud de arriendo fue enviada. Puedes seguir su estado en Arriendos.'
+        'Tu solicitud fue enviada. El propietario revisará tus datos y confirmará la visita. Puedes seguir el estado en Arriendos.'
       );
     } catch (err) {
       setError(
@@ -490,10 +481,6 @@ export default function PropiedadesList() {
               <option value="apartamento">Apartamento</option>
               <option value="casa">Casa</option>
               <option value="habitacion">Habitación</option>
-              <option value="apartaestudio">Apartaestudio</option>
-              <option value="local_comercial">Local comercial</option>
-              <option value="oficina">Oficina</option>
-              <option value="bodega">Bodega</option>
               <option value="finca">Finca</option>
             </select>
             <ChevronDown size={14} />
@@ -520,8 +507,8 @@ export default function PropiedadesList() {
           title="No encontramos propiedades"
           description={
             search ||
-            statusFilter !== 'todos' ||
-            typeFilter !== 'todos'
+              statusFilter !== 'todos' ||
+              typeFilter !== 'todos'
               ? 'Prueba cambiando los filtros de búsqueda.'
               : isOwner
                 ? 'Todavía no has registrado inmuebles. Crea tu primera propiedad para empezar.'
@@ -539,54 +526,29 @@ export default function PropiedadesList() {
         <div className="property-grid">
           {filtered.map((property, index) => (
             <article className="property-card" key={property.id}>
-              <div
-                className={`property-visual property-visual-${index % 4}`}
-              >
-                {property.imagenes?.[0]?.url && (
-                  <img
-                    className="property-cover-image"
-                    src={property.imagenes[0].url}
-                    alt={`Fotografía de ${property.titulo}`}
-                    loading="lazy"
-                    onError={(event) => {
-                      event.currentTarget.style.display = 'none';
-                    }}
-                  />
-                )}
-
-                <div className="property-visual-top">
-                  <span className="property-type-pill">
-                    {typeLabels[property.tipo]}
-                  </span>
-                </div>
-
-                <Building2 size={48} strokeWidth={1.1} />
-
-                <span className="property-visual-caption">
-                  RENTIO · MEDELLÍN
-                </span>
-              </div>
+              <PropertyImageCarousel
+                images={property.imagenes}
+                title={property.titulo}
+                variant="card"
+                fallbackClassName={`property-visual-${index % 4}`}
+              />
 
               <div className="property-card-body">
+                <div className="property-card-classification">
+                  <span className="property-type-label">{property.tipo}</span>
+                  <StatusBadge value={property.estado} />
+                </div>
+
                 <div className="property-location">
                   <MapPin size={14} />
                   {property.barrio?.nombre || property.direccion}
                 </div>
 
-                <div className="property-card-heading">
-                  <h3>{property.titulo}</h3>
-                  <StatusBadge value={property.estado} />
-                </div>
+                <h3>{property.titulo}</h3>
 
                 <p className="property-address">
                   {property.direccion}
                 </p>
-
-                {property.descripcion?.trim() && (
-                  <p className="property-description-preview">
-                    {property.descripcion}
-                  </p>
-                )}
 
                 <button
                   className="property-detail-link"
@@ -834,10 +796,6 @@ export default function PropiedadesList() {
                   <option value="apartamento">Apartamento</option>
                   <option value="casa">Casa</option>
                   <option value="habitacion">Habitación</option>
-                  <option value="apartaestudio">Apartaestudio</option>
-                  <option value="local_comercial">Local comercial</option>
-                  <option value="oficina">Oficina</option>
-                  <option value="bodega">Bodega</option>
                   <option value="finca">Finca</option>
                 </select>
               </Field>
@@ -870,13 +828,6 @@ export default function PropiedadesList() {
 
                   {barrios.map((barrio) => (
                     <option key={barrio.id} value={barrio.id}>
-                      {barrio.tipo === 'vereda'
-                        ? 'Vereda '
-                        : barrio.tipo === 'sector'
-                          ? 'Sector '
-                          : barrio.tipo === 'comuna'
-                            ? ''
-                            : ''}
                       {barrio.nombre} · {barrio.comuna}
                     </option>
                   ))}
@@ -941,16 +892,15 @@ export default function PropiedadesList() {
                         setSelectedFeatures((current) =>
                           current.includes(feature.id)
                             ? current.filter(
-                                (id) => id !== feature.id
-                              )
+                              (id) => id !== feature.id
+                            )
                             : [...current, feature.id]
                         )
                       }
-                      className={`feature-chip ${
-                        selectedFeatures.includes(feature.id)
+                      className={`feature-chip ${selectedFeatures.includes(feature.id)
                           ? 'feature-chip-active'
                           : ''
-                      }`}
+                        }`}
                     >
                       {selectedFeatures.includes(feature.id) ? (
                         <Check size={14} />
@@ -1031,7 +981,10 @@ export default function PropiedadesList() {
                 <p>{selected.direccion}</p>
               </div>
 
-              <StatusBadge value={selected.estado} />
+              <div className="property-detail-classification">
+                <span className="property-type-label">{selected.tipo}</span>
+                <StatusBadge value={selected.estado} />
+              </div>
             </div>
 
             <div className="property-detail-price">
@@ -1040,16 +993,12 @@ export default function PropiedadesList() {
             </div>
 
             {selected.imagenes?.length > 0 && (
-              <div className="property-detail-gallery">
-                {selected.imagenes.map((image) => (
-                  <img
-                    key={image.id}
-                    src={image.url}
-                    alt={`Fotografía de ${selected.titulo}`}
-                    loading="lazy"
-                  />
-                ))}
-              </div>
+              <PropertyImageCarousel
+                key={selected.id}
+                images={selected.imagenes}
+                title={selected.titulo}
+                variant="detail"
+              />
             )}
 
             {selected.descripcion && (
@@ -1180,28 +1129,59 @@ export default function PropiedadesList() {
               </b>
             </div>
 
+            <div className="form-section-title">Tus datos personales</div>
+
             <div className="form-grid-two">
-              <Field label="Nombre" hint="Obligatorio para el contrato">
-                <input className="text-input" required maxLength={100} value={applicant.nombre} onChange={(event) => setApplicant((value) => ({ ...value, nombre: event.target.value }))} />
+              <Field label="Cédula de ciudadanía" hint="Número sin puntos ni comas.">
+                <input
+                  className="text-input"
+                  required
+                  minLength={5}
+                  maxLength={20}
+                  value={requestCedula}
+                  onChange={(e) => setRequestCedula(e.target.value)}
+                  placeholder="Ej: 1023456789"
+                />
               </Field>
-              <Field label="Apellido" hint="Obligatorio para el contrato">
-                <input className="text-input" required maxLength={100} value={applicant.apellido} onChange={(event) => setApplicant((value) => ({ ...value, apellido: event.target.value }))} />
-              </Field>
-              <Field label="Cédula">
-                <input className="text-input" required minLength={5} maxLength={20} value={applicant.cedula} onChange={(event) => setApplicant((value) => ({ ...value, cedula: event.target.value }))} />
-              </Field>
-              <Field label="Celular">
-                <input className="text-input" type="tel" required minLength={7} maxLength={20} value={applicant.telefono} onChange={(event) => setApplicant((value) => ({ ...value, telefono: event.target.value }))} />
+
+              <Field label="Número de celular">
+                <input
+                  className="text-input"
+                  required
+                  minLength={7}
+                  maxLength={20}
+                  value={requestTelefono}
+                  onChange={(e) => setRequestTelefono(e.target.value)}
+                  placeholder="Ej: 3001234567"
+                />
               </Field>
             </div>
 
+            <div className="form-section-title">Visita</div>
+
+            <Field
+              label="Fecha propuesta para la visita"
+              hint="El propietario confirmará o ajustará la fecha."
+            >
+              <input
+                className="text-input"
+                type="date"
+                required
+                min={tomorrowDate}
+                value={requestFechaVisita}
+                onChange={(e) => setRequestFechaVisita(e.target.value)}
+              />
+            </Field>
+
+            <div className="form-section-title">Presentación (opcional)</div>
+
             <Field
               label="Mensaje para el propietario"
-              hint="Cuéntale brevemente por qué te interesa el inmueble. (Opcional)"
+              hint="Cuéntale brevemente por qué te interesa el inmueble."
             >
               <textarea
                 className="text-input textarea-input"
-                rows={4}
+                rows={3}
                 maxLength={1000}
                 value={requestMessage}
                 onChange={(event) =>
@@ -1226,6 +1206,82 @@ export default function PropiedadesList() {
             </div>
           </form>
         </Modal>
+      )}
+    </div>
+  );
+}
+
+function PropertyImageCarousel({
+  images,
+  title,
+  variant,
+  fallbackClassName = '',
+}: {
+  images: Propiedad['imagenes'];
+  title: string;
+  variant: 'card' | 'detail';
+  fallbackClassName?: string;
+}) {
+  const [activeIndex, setActiveIndex] = useState(0);
+  const imageIds = images.map((image) => image.id).join(',');
+
+  useEffect(() => {
+    setActiveIndex(0);
+  }, [imageIds]);
+
+  useEffect(() => {
+    if (images.length < 2) return undefined;
+    const timer = window.setInterval(() => {
+      setActiveIndex((current) => (current + 1) % images.length);
+    }, 5000);
+    return () => window.clearInterval(timer);
+  }, [images.length]);
+
+  function showImage(index: number) {
+    setActiveIndex((index + images.length) % images.length);
+  }
+
+  return (
+    <div className={`property-image-carousel property-image-carousel-${variant}`}>
+      <div className="property-image-viewport">
+        {images.length > 0 ? images.map((image, index) => (
+          <img
+            key={image.id}
+            className={`property-carousel-image ${index === activeIndex ? 'property-carousel-image-active' : ''}`}
+            src={image.url}
+            alt={`Fotografía ${index + 1} de ${title}`}
+            loading={index === 0 ? 'eager' : 'lazy'}
+            aria-hidden={index !== activeIndex}
+          />
+        )) : (
+          <div className={`property-image-empty property-visual ${fallbackClassName}`}>
+            <Building2 size={48} strokeWidth={1.1} />
+          </div>
+        )}
+      </div>
+
+      {images.length > 1 && (
+        <div className="property-carousel-controls" aria-label={`Fotos de ${title}`}>
+          <button type="button" aria-label="Fotografía anterior" onClick={() => showImage(activeIndex - 1)}>
+            <ChevronLeft size={16} />
+          </button>
+          <div className="property-carousel-dots">
+            {images.map((image, index) => (
+              <button
+                key={image.id}
+                type="button"
+                className={index === activeIndex ? 'property-carousel-dot-active' : ''}
+                aria-label={`Mostrar fotografía ${index + 1}`}
+                aria-current={index === activeIndex ? 'true' : undefined}
+                onClick={() => showImage(index)}
+              />
+            ))}
+          </div>
+          <span aria-live="polite">{activeIndex + 1} / {images.length}</span>
+          <button type="button" aria-label="Fotografía siguiente" onClick={() => showImage(activeIndex + 1)}>
+            <ChevronRight size={16} />
+          </button>
+        </div>
       )}
     </div>
   );
