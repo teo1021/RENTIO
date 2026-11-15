@@ -19,6 +19,11 @@ def upgrade():
     bind = op.get_bind()
     inspector = sa.inspect(bind)
 
+    # 0. Asegurar columna tipo en barrios si falta
+    _agregar_columna_si_falta(
+        inspector, "barrios", "tipo", sa.String(20), nullable=False, server_default="barrio"
+    )
+
     # 1. Columnas en solicitudes_arriendo
     _agregar_columna_si_falta(
         inspector, "solicitudes_arriendo", "cedula_arrendatario", sa.String(20), nullable=True
