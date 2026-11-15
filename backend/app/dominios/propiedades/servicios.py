@@ -173,6 +173,12 @@ class PropiedadServicio:
             PermisoPropiedadError: Si el usuario no tiene permisos.
         """
         propiedad = _verificar_propiedad_y_permisos(propiedad_id, usuario_id)
+        try:
+            from app.dominios.ia_marketing.modelos import ConversacionMarketing, ResultadoMarketing
+            ConversacionMarketing.query.filter_by(propiedad_id=propiedad.id).update({"propiedad_id": None})
+            ResultadoMarketing.query.filter_by(propiedad_id=propiedad.id).update({"propiedad_id": None})
+        except Exception:
+            pass
         PropiedadRepositorio.eliminar(propiedad)
 
     @staticmethod

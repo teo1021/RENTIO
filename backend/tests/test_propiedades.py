@@ -84,3 +84,50 @@ def test_crud_completo_propiedades(client, propietario_auth, arrendatario_auth, 
     # Verificar que ya no existe (404)
     res_get_del = client.get(f"/api/v1/propiedades/{prop_id}")
     assert res_get_del.status_code == 404
+
+
+def test_eliminar_propiedad_con_solicitudes(client, propietario_auth, arrendatario_auth, db):
+    """Verifica que un propietario pueda eliminar una propiedad aunque tenga solicitudes de arriendo asociadas (cascade)."""
+    headers_prop = propietario_auth["headers"]
+    headers_arren = arrendatario_auth["headers"]
+
+    # Crear propiedad
+    res_crear = client.post(
+        "/api/v1/propiedades",
+        headers=headers_prop,
+        json={
+            "titulo": "Apartamento en Laureles",
+            "descripcion": "Cerca al primer parque",
+            "precio_mensual": 2800000.0,
+            "direccion": "Circular 2 # 73-10",
+            "estrato": 4,
+            "habitaciones": 2,
+            "banos": 2,
+            "tipo": "apartamento",
+        },
+    )
+    assert res_crear.status_code == 201
+    prop_id = res_crear.get_json()["data"]["id"]
+
+    # Arrendatario envía solicitud
+    res_sol = client.post(
+        "/api/v1/arriendos/solicitar",
+        headers=headers_arren,
+        json={
+            "propiedad_id": prop_id,
+            "mensaje": "Quiero arrendar este apartamento",
+            "cedula_arrendatario": "987654321",
+            "telefono_arrendatario": "3109876543",
+            "fecha_visita_propuesta": "2026-11-25",
+        },
+    )
+    assert res_sol.status_code == 201
+
+    # Propietario elimina la propiedad (debe tener éxito con cascade en solicitudes)
+    res_del = client.delete(f"/api/v1/propiedades/{prop_id}", headers=headers_prop)
+    assert res_del.status_code == 200
+    assert "éxito" in res_del.get_json()["message"]
+
+    # Verificar que la propiedad ya no existe
+    res_check = client.get(f"/api/v1/propiedades/{prop_id}")
+    assert res_check.status_code == 404

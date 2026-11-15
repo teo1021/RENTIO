@@ -97,6 +97,8 @@ class Propiedad(db.Model):
     solicitudes = db.relationship(
         "SolicitudArriendo",
         back_populates="propiedad",
+        cascade="all, delete-orphan",
+        passive_deletes=True,
         lazy="dynamic",
     )
 

@@ -69,9 +69,15 @@ class GeneradorDescripcion:
         caracs_str = ", ".join(caracteristicas) if caracteristicas else ""
 
         prompt_sistema = (
-            "Eres un redactor inmobiliario profesional en Medellín, Colombia. "
-            "Redactas descripciones comerciales atractivas para portales de arriendo. "
-            "REGLA OBLIGATORIA: NUNCA inventes características, amenidades o servicios que el usuario no haya mencionado explícitamente."
+            "Eres un redactor y copywriter inmobiliario de primer nivel en Medellín, Colombia. "
+            "Tu misión es crear descripciones de arriendo irresistibles, profesionales, cálidas y sumamente atractivas "
+            "(llamativas), orientadas a captar inquilinos calificados en los mejores portales inmobiliarios.\n"
+            "DIRECTRICES DE REDACCIÓN:\n"
+            "1. Tono cautivador: Empieza con un gancho entusiasta que resalte el estilo de vida, confort y la excelente ubicación en Medellín.\n"
+            "2. Espacio y luz: Describe las habitaciones, baños y áreas destacando la distribución funcional, iluminación y sensación de amplitud.\n"
+            "3. Beneficios tangibles: Conecta las comodidades (como parqueadero, balcón, ascensor, solo si están confirmadas) con momentos agradables del día a día.\n"
+            "4. Llamado a la acción: Cierra invitando amablemente a agendar una visita antes de que se arriende.\n"
+            "5. REGLA OBLIGATORIA DE FIDELIDAD: NUNCA inventes características, amenidades ni servicios que el usuario no haya confirmado explícitamente."
         )
 
         detalles_usuario = [
@@ -96,31 +102,36 @@ class GeneradorDescripcion:
             )
 
         prompt_usuario = (
-            f"{'Mejora la descripción previa' if descripcion_actual else 'Crea una descripción comercial'} "
+            f"{'Mejora y potencia la siguiente descripción previa haciéndola mucho más comercial y llamativa' if descripcion_actual else 'Crea una descripción comercial sumamente llamativa y atractiva'} "
             f"para arriendo en Medellín con los siguientes datos confirmados:\n"
             + "\n".join(f"- {d}" for d in detalles_usuario)
-            + f"\nTono deseado: {tono}. "
-            "Responde únicamente con el texto listo para publicar en el portal, destacando la ubicación y distribución."
+            + f"\nTono deseado: {tono} (moderno, vibrante, profesional).\n"
+            "Escribe un texto persuasivo listo para publicar, con formato limpio, párrafos fluidos y un llamado a agendar visita."
         )
 
         texto_ia = cls._invocar_llm(prompt_sistema, prompt_usuario)
 
         if not texto_ia:
-            # Plantilla determinista contextual sin alucinaciones
-            area_frase = f" con un área de {area} m²" if area else ""
-            estrato_frase = f" (Estrato {estrato})" if estrato else ""
-            parq_frase = " Cuenta con parqueadero privado." if parqueadero is True else ""
+            # Plantilla determinista contextual llamativa y sin alucinaciones
+            area_frase = f", perfectamente distribuidos en {area} m² de área privada" if area else ""
+            estrato_frase = f" en estrato {estrato}" if estrato else ""
 
+            amenidades_bloque = ""
             if caracs_str:
-                amenidades_frase = f" Entre sus comodidades confirmadas se destacan: {caracs_str}."
-            else:
-                amenidades_frase = ""
+                amenidades_bloque = f"\n\n✨ Comodidades destacadas:\nDisfruta de {caracs_str}."
+            if parqueadero is True:
+                amenidades_bloque += ("\n" if not amenidades_bloque else " ") + "🚗 Incluye parqueadero privado para tu total comodidad y seguridad."
+
+            hab_texto = f"{habitaciones} espaciosa{'s' if habitaciones != 1 else ''} habitaci{'ón' if habitaciones == 1 else 'ones'}"
+            bano_texto = f"{banos} baño{'s' if banos != 1 else ''} funcional{'es' if banos != 1 else ''}"
 
             texto_ia = (
-                f"Arriendo de {tipo} en {barrio}{area_frase}{estrato_frase}, "
-                f"distribuido en {habitaciones} habitación(es) y {banos} baño(s). "
-                f"{amenidades_frase}{parq_frase} "
-                "Para obtener más información, contacta al propietario."
+                f"¡Excelente oportunidad de arriendo en {barrio}! "
+                f"Espectacular {tipo}{estrato_frase}, diseñado para brindarte el máximo confort y bienestar.\n\n"
+                f"La propiedad destaca por su iluminación natural, ventilación y distribución inteligente. "
+                f"Cuenta con {hab_texto} y {bano_texto}{area_frase}, creando un ambiente acogedor ideal para vivir con tranquilidad.{amenidades_bloque}\n\n"
+                f"📍 Ubicación privilegiada en {barrio}, con fácil acceso al transporte público, zonas comerciales, parques y servicios esenciales.\n\n"
+                f"¡No dejes pasar esta oportunidad! Agenda tu visita hoy mismo y enamórate de tu nuevo hogar."
             )
 
         # Puntos destacados
