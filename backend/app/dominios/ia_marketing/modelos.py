@@ -12,15 +12,21 @@ class ConversacionMarketing(db.Model):
             "estado IN ('recopilando','lista','generada','cerrada')",
             name="ck_ia_conversacion_estado",
         ),
+        db.Index(
+            "ix_ia_conversaciones_propietario",
+            "propietario_id",
+            "fecha_actualizacion",
+        ),
+        db.Index("ix_ia_conversaciones_propiedad", "propiedad_id"),
         {"schema": "ia_marketing"},
     )
 
     id = db.Column(db.Integer, primary_key=True)
     propietario_id = db.Column(
-        db.Integer, db.ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False, index=True
+        db.Integer, db.ForeignKey("usuarios.id", ondelete="CASCADE"), nullable=False
     )
     propiedad_id = db.Column(
-        db.Integer, db.ForeignKey("propiedades.id", ondelete="SET NULL"), nullable=True, index=True
+        db.Integer, db.ForeignKey("propiedades.id", ondelete="SET NULL"), nullable=True
     )
     estado = db.Column(db.String(20), nullable=False, default="recopilando")
     datos_recopilados = db.Column(db.JSON, nullable=False, default=dict)
@@ -34,11 +40,12 @@ class MensajeMarketing(db.Model):
     __tablename__ = "mensajes"
     __table_args__ = (
         db.CheckConstraint("rol IN ('usuario','asistente')", name="ck_ia_mensaje_rol"),
+        db.Index("ix_ia_mensajes_conversacion_id", "conversacion_id"),
         {"schema": "ia_marketing"},
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    conversacion_id = db.Column(db.Integer, db.ForeignKey("ia_marketing.conversaciones.id", ondelete="CASCADE"), nullable=False, index=True)
+    conversacion_id = db.Column(db.Integer, db.ForeignKey("ia_marketing.conversaciones.id", ondelete="CASCADE"), nullable=False)
     rol = db.Column(db.String(20), nullable=False)
     contenido = db.Column(db.Text, nullable=False)
     datos_extraidos = db.Column(db.JSON, nullable=False, default=dict)
@@ -53,12 +60,14 @@ class ResultadoMarketing(db.Model):
             "precio_minimo IS NULL OR precio_maximo IS NULL OR precio_minimo <= precio_maximo",
             name="ck_ia_rango_precio",
         ),
+        db.Index("ix_ia_resultados_conversacion_id", "conversacion_id"),
+        db.Index("ix_ia_resultados_propiedad_id", "propiedad_id"),
         {"schema": "ia_marketing"},
     )
 
     id = db.Column(db.Integer, primary_key=True)
-    conversacion_id = db.Column(db.Integer, db.ForeignKey("ia_marketing.conversaciones.id", ondelete="CASCADE"), nullable=False, index=True)
-    propiedad_id = db.Column(db.Integer, db.ForeignKey("propiedades.id", ondelete="SET NULL"), nullable=True, index=True)
+    conversacion_id = db.Column(db.Integer, db.ForeignKey("ia_marketing.conversaciones.id", ondelete="CASCADE"), nullable=False)
+    propiedad_id = db.Column(db.Integer, db.ForeignKey("propiedades.id", ondelete="SET NULL"), nullable=True)
     descripcion = db.Column(db.Text, nullable=False)
     precio_sugerido = db.Column(db.Numeric(12, 2), nullable=True)
     precio_minimo = db.Column(db.Numeric(12, 2), nullable=True)

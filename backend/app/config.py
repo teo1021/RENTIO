@@ -22,7 +22,10 @@ class Config:
     JWT_EXP_MINUTES = int(os.getenv("JWT_EXP_MINUTES", "15"))
 
     # ── CORS ────────────────────────────────────────────────────────────
-    CORS_ALLOWED_ORIGINS = os.getenv("CORS_ALLOWED_ORIGINS", "*")
+    CORS_ALLOWED_ORIGINS = os.getenv(
+        "CORS_ALLOWED_ORIGINS",
+        "http://localhost:3000,http://127.0.0.1:3000",
+    )
 
     # ── Base de datos ───────────────────────────────────────────────────
     DB_USER = os.getenv("DB_USER", "postgres")

@@ -32,7 +32,7 @@ export default function Dashboard() {
           const [props, reqs, contractsData] = await Promise.all([propertiesApi.listPublic({}), rentalsApi.mine(), rentalsApi.contracts()]);
           if (active) { setProperties(props.filter((p) => p.estado === 'disponible')); setRequests(reqs); setContracts(contractsData); }
         } else if (role === 'admin') {
-          const [props, usersData] = await Promise.all([propertiesApi.listPublic({}), adminApi.users()]);
+          const [props, usersData] = await Promise.all([adminApi.properties(), adminApi.users()]);
           if (active) { setProperties(props); setUsers(usersData); }
         }
       } catch (err) { if (active) setError(getApiError(err, 'No fue posible cargar el resumen.')); }
@@ -44,7 +44,7 @@ export default function Dashboard() {
 
   const available = useMemo(() => properties.filter((p) => p.estado === 'disponible').length, [properties]);
   const activeContracts = contracts.filter((c) => c.estado === 'activo').length;
-  const pending = requests.filter((r) => r.estado === 'pendiente').length;
+  const pending = requests.filter((r) => ['pendiente', 'pendiente_visita'].includes(r.estado)).length;
   const titleByRole = role === 'propietario' ? 'Administra con claridad.' : role === 'arrendatario' ? 'Encuentra tu próximo hogar.' : 'Todo bajo control.';
 
   return <div className="page-stack">
@@ -55,7 +55,7 @@ export default function Dashboard() {
       <div className="stats-grid">
         {role === 'propietario' && <><StatCard label="Mis propiedades" value={properties.length} detail={`${available} disponibles`} icon={Building2} tone="blue" /><StatCard label="Solicitudes pendientes" value={pending} detail="Requieren tu respuesta" icon={ClipboardList} tone="amber" /><StatCard label="Contratos activos" value={activeContracts} detail={`${contracts.length} en total`} icon={FileText} tone="teal" /><StatCard label="Valor mensual activo" value={money(contracts.filter((c) => c.estado === 'activo').reduce((sum, c) => sum + Number(c.precio_acordado || 0), 0))} detail="Según contratos activos" icon={Wallet} tone="violet" /></>}
         {role === 'arrendatario' && <><StatCard label="Inmuebles disponibles" value={available} detail="Publicados en la plataforma" icon={Home} tone="blue" /><StatCard label="Mis solicitudes" value={requests.length} detail={`${pending} pendientes`} icon={ClipboardList} tone="amber" /><StatCard label="Contratos activos" value={activeContracts} detail="Arriendos formalizados" icon={FileText} tone="teal" /></>}
-        {role === 'admin' && <><StatCard label="Propiedades publicadas" value={properties.length} detail={`${available} disponibles`} icon={Building2} tone="blue" /><StatCard label="Usuarios registrados" value={users.length} detail="Todas las cuentas" icon={Users} tone="teal" /><StatCard label="Propiedades arrendadas" value={properties.filter((p) => p.estado === 'arrendada').length} detail="Inventario ocupado" icon={Home} tone="violet" /><StatCard label="Propiedades inactivas" value={properties.filter((p) => p.estado === 'inactiva').length} detail="Fuera de publicación" icon={Activity} tone="amber" /></>}
+        {role === 'admin' && <><StatCard label="Propiedades registradas" value={properties.length} detail={`${available} disponibles`} icon={Building2} tone="blue" /><StatCard label="Usuarios registrados" value={users.length} detail="Todas las cuentas" icon={Users} tone="teal" /><StatCard label="Propiedades arrendadas" value={properties.filter((p) => p.estado === 'arrendada').length} detail="Inventario ocupado" icon={Home} tone="violet" /><StatCard label="Propiedades inactivas" value={properties.filter((p) => p.estado === 'inactiva').length} detail="Fuera de publicación" icon={Activity} tone="amber" /></>}
       </div>
       <div className="dashboard-columns">
         <Panel className="dashboard-main-panel"><div className="panel-heading"><div><span className="eyebrow">ACTIVIDAD RECIENTE</span><h2>{role === 'propietario' ? 'Solicitudes por atender' : role === 'arrendatario' ? 'Tus solicitudes' : 'Propiedades recientes'}</h2></div><Link className="text-link" to={role === 'admin' ? '/propiedades' : role === 'propietario' || role === 'arrendatario' ? '/arriendos' : '/propiedades'}>Ver todo <ArrowRight size={15} /></Link></div>

@@ -21,7 +21,7 @@ from app.dominios.arriendos.servicios import (
     SolicitudNoEncontradaError,
 )
 from app.dominios.propiedades.servicios import PropiedadNoEncontradaError
-from app.seguridad import requiere_propietario, requiere_token
+from app.seguridad import requiere_arrendatario, requiere_propietario, requiere_token
 
 # ── Servicio inyectado por el factory ──────────────────────────────────
 servicio = None
@@ -47,7 +47,7 @@ def _ok(data, message="", code=200):
 
 
 @arriendos_bp.route("/solicitar", methods=["POST"])
-@requiere_token
+@requiere_arrendatario
 def solicitar(usuario_id=None):
     """Crea una nueva solicitud de arriendo con datos personales y fecha de visita."""
     try:
@@ -70,7 +70,7 @@ def solicitar(usuario_id=None):
 
 
 @arriendos_bp.route("/mis-solicitudes", methods=["GET"])
-@requiere_token
+@requiere_arrendatario
 def mis_solicitudes(usuario_id=None):
     """Lista las solicitudes de arriendo enviadas por el usuario actual."""
     solicitudes = servicio.listar_mis_solicitudes(usuario_id)

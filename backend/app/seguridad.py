@@ -12,6 +12,34 @@ import functools
 import jwt
 from flask import current_app, jsonify, request
 
+from app.dominios.usuarios.repositorios import UsuarioRepositorio
+
+
+def _usuario_autenticado():
+    payload, error = _extraer_y_validar_token()
+    if error:
+        return None, error
+
+    usuario_id = payload.get("usuario_id")
+    if not isinstance(usuario_id, int) or isinstance(usuario_id, bool):
+        return None, (
+            jsonify({"success": False, "error": {"message": "Token inválido."}}),
+            401,
+        )
+
+    usuario = UsuarioRepositorio.obtener_por_id(usuario_id)
+    if not usuario:
+        return None, (
+            jsonify(
+                {
+                    "success": False,
+                    "error": {"message": "La cuenta asociada al token ya no existe."},
+                }
+            ),
+            401,
+        )
+    return usuario, None
+
 
 def _extraer_y_validar_token():
     """
@@ -84,10 +112,10 @@ def requiere_token(f):
 
     @functools.wraps(f)
     def decorador(*args, **kwargs):
-        payload, error = _extraer_y_validar_token()
+        usuario, error = _usuario_autenticado()
         if error:
             return error
-        kwargs["usuario_id"] = payload["usuario_id"]
+        kwargs["usuario_id"] = usuario.id
         return f(*args, **kwargs)
 
     return decorador
@@ -98,10 +126,10 @@ def requiere_admin(f):
 
     @functools.wraps(f)
     def decorador(*args, **kwargs):
-        payload, error = _extraer_y_validar_token()
+        usuario, error = _usuario_autenticado()
         if error:
             return error
-        if payload.get("rol") != "admin":
+        if usuario.rol != "admin":
             return (
                 jsonify(
                     {
@@ -111,7 +139,7 @@ def requiere_admin(f):
                 ),
                 403,
             )
-        kwargs["usuario_id"] = payload["usuario_id"]
+        kwargs["usuario_id"] = usuario.id
         return f(*args, **kwargs)
 
     return decorador
@@ -122,10 +150,10 @@ def requiere_propietario(f):
 
     @functools.wraps(f)
     def decorador(*args, **kwargs):
-        payload, error = _extraer_y_validar_token()
+        usuario, error = _usuario_autenticado()
         if error:
             return error
-        if payload.get("rol") != "propietario":
+        if usuario.rol != "propietario":
             return (
                 jsonify(
                     {
@@ -135,7 +163,31 @@ def requiere_propietario(f):
                 ),
                 403,
             )
-        kwargs["usuario_id"] = payload["usuario_id"]
+        kwargs["usuario_id"] = usuario.id
+        return f(*args, **kwargs)
+
+    return decorador
+
+
+def requiere_arrendatario(f):
+    """Decorador que valida JWT y verifica que el usuario tenga rol 'arrendatario'."""
+
+    @functools.wraps(f)
+    def decorador(*args, **kwargs):
+        usuario, error = _usuario_autenticado()
+        if error:
+            return error
+        if usuario.rol != "arrendatario":
+            return (
+                jsonify(
+                    {
+                        "success": False,
+                        "error": {"message": "Se requiere rol de arrendatario."},
+                    }
+                ),
+                403,
+            )
+        kwargs["usuario_id"] = usuario.id
         return f(*args, **kwargs)
 
     return decorador

@@ -4,6 +4,8 @@ Repositorio del dominio de usuarios.
 Capa de acceso a datos — solo queries y operaciones de persistencia.
 """
 
+from sqlalchemy.orm import selectinload
+
 from app import db
 from app.dominios.usuarios.modelos import PerfilUsuario, Usuario
 
@@ -31,7 +33,7 @@ class UsuarioRepositorio:
     @staticmethod
     def obtener_todos():
         """Retorna todos los usuarios registrados."""
-        return Usuario.query.all()
+        return Usuario.query.options(selectinload(Usuario.perfil)).all()
 
     @staticmethod
     def eliminar(usuario):

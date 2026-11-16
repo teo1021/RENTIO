@@ -6,6 +6,8 @@ from app.dominios.barrios.modelos import Barrio
 from app.dominios.barrios.repositorios import BarrioRepositorio
 from app.dominios.caracteristicas.modelos import Caracteristica
 from app.dominios.caracteristicas.repositorios import CaracteristicaRepositorio
+from app.dominios.propiedades.modelos import Propiedad
+from app.dominios.propiedades.repositorios import PropiedadRepositorio
 
 
 def test_crud_completo_propiedades(client, propietario_auth, arrendatario_auth, db):
@@ -84,6 +86,43 @@ def test_crud_completo_propiedades(client, propietario_auth, arrendatario_auth, 
     # Verificar que ya no existe (404)
     res_get_del = client.get(f"/api/v1/propiedades/{prop_id}")
     assert res_get_del.status_code == 404
+
+
+def test_solo_admin_puede_consultar_inventario_completo(
+    client, admin_auth, propietario_auth, db
+):
+    propiedad_inactiva = PropiedadRepositorio.guardar(
+        Propiedad(
+            titulo="Propiedad archivada",
+            precio_mensual=1500000,
+            direccion="Calle 10",
+            estrato=3,
+            estado="inactiva",
+            propietario_id=propietario_auth["usuario"].id,
+        )
+    )
+
+    publico = client.get("/api/v1/propiedades")
+    assert all(
+        item["id"] != propiedad_inactiva.id
+        for item in publico.get_json()["data"]
+    )
+
+    no_admin = client.get(
+        "/api/v1/propiedades/administracion",
+        headers=propietario_auth["headers"],
+    )
+    assert no_admin.status_code == 403
+
+    inventario = client.get(
+        "/api/v1/propiedades/administracion",
+        headers=admin_auth["headers"],
+    )
+    assert inventario.status_code == 200
+    assert any(
+        item["id"] == propiedad_inactiva.id
+        for item in inventario.get_json()["data"]
+    )
 
 
 def test_eliminar_propiedad_con_solicitudes(client, propietario_auth, arrendatario_auth, db):

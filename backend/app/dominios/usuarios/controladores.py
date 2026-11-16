@@ -158,7 +158,7 @@ def listar_usuarios(usuario_id=None):
             {
                 "success": True,
                 "message": "Usuarios obtenidos con éxito.",
-                "data": [u.to_dict() for u in usuarios],
+                "data": [u.to_admin_dict() for u in usuarios],
             }
         ),
         200,
@@ -185,13 +185,13 @@ def cambiar_rol(id, usuario_id=None):
             400,
         )
 
-    usuario = servicio.cambiar_rol(id, datos["rol"])
+    usuario = servicio.cambiar_rol(id, datos["rol"], usuario_id)
     return (
         jsonify(
             {
                 "success": True,
                 "message": "Rol actualizado con éxito.",
-                "data": usuario.to_dict(),
+                "data": usuario.to_admin_dict(),
             }
         ),
         200,

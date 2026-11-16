@@ -6,6 +6,8 @@ Lógica de negocio para crear, actualizar, eliminar y filtrar propiedades.
 Define excepciones de dominio propias.
 """
 
+from sqlalchemy.exc import SQLAlchemyError
+
 from app import db
 from app.dominios.caracteristicas.repositorios import CaracteristicaRepositorio
 from app.dominios.propiedades.modelos import Propiedad
@@ -120,9 +122,9 @@ class PropiedadServicio:
         return propiedad
 
     @staticmethod
-    def listar(filtros=None):
+    def listar(filtros=None, incluir_inactivas=False):
         """Lista propiedades con filtros opcionales."""
-        return PropiedadRepositorio.obtener_todos(filtros)
+        return PropiedadRepositorio.obtener_todos(filtros, incluir_inactivas)
 
     @staticmethod
     def listar_mis_propiedades(propietario_id):
@@ -173,13 +175,22 @@ class PropiedadServicio:
             PermisoPropiedadError: Si el usuario no tiene permisos.
         """
         propiedad = _verificar_propiedad_y_permisos(propiedad_id, usuario_id)
+        from app.dominios.ia_marketing.modelos import (
+            ConversacionMarketing,
+            ResultadoMarketing,
+        )
+
         try:
-            from app.dominios.ia_marketing.modelos import ConversacionMarketing, ResultadoMarketing
-            ConversacionMarketing.query.filter_by(propiedad_id=propiedad.id).update({"propiedad_id": None})
-            ResultadoMarketing.query.filter_by(propiedad_id=propiedad.id).update({"propiedad_id": None})
-        except Exception:
-            pass
-        PropiedadRepositorio.eliminar(propiedad)
+            ConversacionMarketing.query.filter_by(propiedad_id=propiedad.id).update(
+                {"propiedad_id": None}
+            )
+            ResultadoMarketing.query.filter_by(propiedad_id=propiedad.id).update(
+                {"propiedad_id": None}
+            )
+            PropiedadRepositorio.eliminar(propiedad)
+        except SQLAlchemyError:
+            db.session.rollback()
+            raise
 
     @staticmethod
     def actualizar_caracteristicas(propiedad_id, caracteristicas_ids, usuario_id):

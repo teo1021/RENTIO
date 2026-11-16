@@ -24,7 +24,7 @@ from app.dominios.propiedades.dtos import (
 )
 from app.dominios.propiedades.modelos import ImagenPropiedad, Propiedad
 from app.dominios.usuarios.repositorios import UsuarioRepositorio
-from app.seguridad import requiere_propietario, requiere_token
+from app.seguridad import requiere_admin, requiere_propietario, requiere_token
 
 # ── Servicio inyectado por el factory ──────────────────────────────────
 servicio = None
@@ -93,6 +93,23 @@ def listar():
                 "success": True,
                 "message": "Propiedades obtenidas con éxito.",
                 "data": [p.to_dict() for p in propiedades],
+            }
+        ),
+        200,
+    )
+
+
+@propiedades_bp.route("/administracion", methods=["GET"])
+@requiere_admin
+def listar_todas(usuario_id=None):
+    """Lista todo el inventario, incluidas propiedades inactivas (solo admin)."""
+    propiedades = servicio.listar(incluir_inactivas=True)
+    return (
+        jsonify(
+            {
+                "success": True,
+                "message": "Inventario obtenido con éxito.",
+                "data": [propiedad.to_dict() for propiedad in propiedades],
             }
         ),
         200,

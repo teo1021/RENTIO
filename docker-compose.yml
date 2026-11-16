@@ -4,9 +4,9 @@ services:
     environment:
       POSTGRES_DB: ${DB_NAME:-rentio}
       POSTGRES_USER: ${DB_USER:-rentio}
-      POSTGRES_PASSWORD: ${DB_PASSWORD:-rentio_local_only}
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Set a unique DB_PASSWORD in .env}
     ports:
-      - "${DB_PORT_HOST:-5433}:5432"
+      - "127.0.0.1:${DB_PORT_HOST:-5433}:5432"
     volumes:
       - rentio_postgres:/var/lib/postgresql/data
       - ./backend/sql/create_database.sql:/docker-entrypoint-initdb.d/001-create-database.sql:ro

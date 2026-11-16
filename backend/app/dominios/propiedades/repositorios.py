@@ -28,7 +28,7 @@ class PropiedadRepositorio:
         return db.session.get(Propiedad, propiedad_id)
 
     @staticmethod
-    def obtener_todos(filtros=None):
+    def obtener_todos(filtros=None, incluir_inactivas=False):
         """
         Obtiene propiedades con filtros opcionales.
 
@@ -38,7 +38,9 @@ class PropiedadRepositorio:
         Returns:
             list: Lista de propiedades que cumplen los filtros.
         """
-        query = Propiedad.query.filter(Propiedad.estado != "inactiva")
+        query = Propiedad.query
+        if not incluir_inactivas:
+            query = query.filter(Propiedad.estado != "inactiva")
 
         if filtros:
             if filtros.get("barrio_id"):

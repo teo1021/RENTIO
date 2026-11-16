@@ -17,6 +17,20 @@ db = SQLAlchemy()
 migrate = Migrate()
 
 
+def _incluir_objeto_migracion(objeto, nombre, tipo, reflejado, comparado_con):
+    """Conserva la columna JSON legacy usuarios.roles sin gestionarla desde ORM."""
+    tabla = getattr(objeto, "table", None)
+    if (
+        tipo == "column"
+        and reflejado
+        and nombre == "roles"
+        and getattr(tabla, "name", None) == "usuarios"
+        and getattr(tabla, "schema", None) in (None, "public")
+    ):
+        return False
+    return True
+
+
 def crear_app(config_class=None):
     """
     Application Factory para crear e inicializar la aplicación Flask.
@@ -40,7 +54,12 @@ def crear_app(config_class=None):
 
     # ── Extensiones ──────────────────────────────────────────────────────
     db.init_app(app)
-    migrate.init_app(app, db)
+    migrate.init_app(
+        app,
+        db,
+        include_schemas=True,
+        include_object=_incluir_objeto_migracion,
+    )
     cors_origins = app.config.get("CORS_ALLOWED_ORIGINS", "*")
     if isinstance(cors_origins, str) and cors_origins != "*":
         cors_origins = [o.strip() for o in cors_origins.split(",") if o.strip()]
@@ -83,6 +102,7 @@ def crear_app(config_class=None):
     )
     from app.dominios.usuarios import controladores as usuarios_ctrl
     from app.dominios.usuarios.servicios import (
+        CambioRolNoPermitidoError,
         CorreoYaRegistradoError,
         CredencialesInvalidasError,
         UsuarioNoEncontradoError,
@@ -142,6 +162,7 @@ def crear_app(config_class=None):
     # 403 Forbidden
     app.register_error_handler(PermisoPropiedadError, _crear_error_handler(403))
     app.register_error_handler(PermisoArriendoError, _crear_error_handler(403))
+    app.register_error_handler(CambioRolNoPermitidoError, _crear_error_handler(403))
 
     # 404 Not Found
     app.register_error_handler(UsuarioNoEncontradoError, _crear_error_handler(404))

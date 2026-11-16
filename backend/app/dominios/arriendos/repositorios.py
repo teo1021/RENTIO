@@ -13,10 +13,11 @@ class SolicitudRepositorio:
     """Métodos de acceso a datos para solicitudes de arriendo."""
 
     @staticmethod
-    def guardar(solicitud):
+    def guardar(solicitud, commit=True):
         """Persiste una solicitud de arriendo."""
         db.session.add(solicitud)
-        db.session.commit()
+        if commit:
+            db.session.commit()
         return solicitud
 
     @staticmethod
@@ -64,10 +65,11 @@ class ContratoRepositorio:
     """Métodos de acceso a datos para contratos de arriendo."""
 
     @staticmethod
-    def guardar(contrato):
+    def guardar(contrato, commit=True):
         """Persiste un contrato de arriendo."""
         db.session.add(contrato)
-        db.session.commit()
+        if commit:
+            db.session.commit()
         return contrato
 
     @staticmethod

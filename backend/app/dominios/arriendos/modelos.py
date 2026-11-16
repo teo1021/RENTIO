@@ -28,6 +28,11 @@ class SolicitudArriendo(db.Model):
     )
     mensaje = db.Column(db.Text, nullable=True)
 
+    arrendatario_nombre = db.Column(db.String(100), nullable=True)
+    arrendatario_apellido = db.Column(db.String(100), nullable=True)
+    arrendatario_cedula = db.Column(db.String(20), nullable=True)
+    arrendatario_telefono = db.Column(db.String(20), nullable=True)
+
     # Datos personales del interesado (recopilados al solicitar)
     cedula_arrendatario = db.Column(db.String(20), nullable=True)
     telefono_arrendatario = db.Column(db.String(20), nullable=True)
@@ -138,6 +143,7 @@ class ContratoArriendo(db.Model):
     fecha_inicio = db.Column(db.Date, nullable=False)
     fecha_fin = db.Column(db.Date, nullable=False)
     precio_acordado = db.Column(db.Numeric(10, 2), nullable=False)
+    contenido = db.Column(db.Text, nullable=True)
     estado = db.Column(
         db.Enum("activo", "finalizado", "cancelado", name="estado_contrato"),
         nullable=False,

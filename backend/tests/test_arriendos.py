@@ -2,8 +2,12 @@
 Tests automatizados para el dominio de arriendos y contratos.
 """
 
+import pytest
+from sqlalchemy.exc import SQLAlchemyError
+
 from app.dominios.propiedades.modelos import Propiedad
 from app.dominios.propiedades.repositorios import PropiedadRepositorio
+from app.dominios.arriendos.servicios import ArriendoServicio
 
 
 def test_flujo_solicitud_y_contrato_arriendo(client, propietario_auth, arrendatario_auth, db):
@@ -124,3 +128,67 @@ def test_flujo_solicitud_y_contrato_arriendo(client, propietario_auth, arrendata
     assert len(contratos) >= 1
     assert contratos[0]["precio_acordado"] == 4500000.0
     assert contratos[0]["cargo"] == "Desarrollador Senior"
+
+
+def test_solo_arrendatarios_pueden_crear_y_listar_solicitudes(
+    client, propietario_auth, admin_auth
+):
+    for autenticacion in (propietario_auth, admin_auth):
+        headers = autenticacion["headers"]
+        assert client.get("/api/v1/arriendos/mis-solicitudes", headers=headers).status_code == 403
+        assert (
+            client.post(
+                "/api/v1/arriendos/solicitar",
+                headers=headers,
+                json={},
+            ).status_code
+            == 403
+        )
+
+
+def test_fallo_al_confirmar_contrato_revierte_toda_la_operacion(
+    client, propietario_auth, arrendatario_auth, db, monkeypatch
+):
+    from app.dominios.arriendos.modelos import ContratoArriendo, SolicitudArriendo
+
+    propiedad = PropiedadRepositorio.guardar(
+        Propiedad(
+            titulo="Apartamento de prueba",
+            precio_mensual=2000000,
+            direccion="Calle 10",
+            estrato=3,
+            propietario_id=propietario_auth["usuario"].id,
+        )
+    )
+    respuesta = client.post(
+        "/api/v1/arriendos/solicitar",
+        headers=arrendatario_auth["headers"],
+        json={
+            "propiedad_id": propiedad.id,
+            "cedula_arrendatario": "1020304050",
+            "telefono_arrendatario": "3001234567",
+            "fecha_visita_propuesta": "2026-11-25",
+        },
+    )
+    solicitud_id = respuesta.get_json()["data"]["id"]
+    client.patch(
+        f"/api/v1/arriendos/{solicitud_id}/responder-visita",
+        headers=propietario_auth["headers"],
+        json={"estado": "visita_programada"},
+    )
+
+    def fallar_commit():
+        raise SQLAlchemyError("Fallo de prueba al confirmar la transacción.")
+
+    monkeypatch.setattr(db.session, "commit", fallar_commit)
+    with pytest.raises(SQLAlchemyError):
+        ArriendoServicio.generar_contrato(
+            solicitud_id,
+            {"fecha_inicio": "2026-12-01", "fecha_fin": "2027-11-30"},
+            propietario_auth["usuario"].id,
+        )
+
+    db.session.expire_all()
+    assert db.session.get(SolicitudArriendo, solicitud_id).estado == "visita_programada"
+    assert db.session.get(Propiedad, propiedad.id).estado == "disponible"
+    assert ContratoArriendo.query.filter_by(solicitud_id=solicitud_id).count() == 0

@@ -6,11 +6,16 @@ Define excepciones de dominio propias.
 """
 
 import hashlib
+import hmac
+import re
 from datetime import datetime, timedelta, timezone
 
 import jwt
 from flask import current_app
+from sqlalchemy.exc import SQLAlchemyError
+from werkzeug.security import check_password_hash, generate_password_hash
 
+from app import db
 from app.dominios.usuarios.modelos import PerfilUsuario, Usuario
 from app.dominios.usuarios.repositorios import PerfilRepositorio, UsuarioRepositorio
 
@@ -37,6 +42,12 @@ class UsuarioNoEncontradoError(Exception):
     pass
 
 
+class CambioRolNoPermitidoError(Exception):
+    """Se lanza cuando un cambio de rol requiere el procedimiento administrativo controlado."""
+
+    pass
+
+
 # ═══════════════════════════════════════════════════════════════════════════════
 # Servicio
 # ═══════════════════════════════════════════════════════════════════════════════
@@ -47,8 +58,22 @@ class UsuarioServicio:
 
     @staticmethod
     def _hash_contrasena(contrasena):
-        """Genera un hash SHA-256 de la contraseña."""
-        return hashlib.sha256(contrasena.encode("utf-8")).hexdigest()
+        """Genera un hash de contraseña resistente a ataques de diccionario."""
+        return generate_password_hash(contrasena)
+
+    @staticmethod
+    def _verificar_contrasena(usuario, contrasena):
+        """Verifica hashes actuales y migra hashes SHA-256 heredados al iniciar sesión."""
+        hash_guardado = usuario.contrasena
+        if re.fullmatch(r"[a-fA-F0-9]{64}", hash_guardado):
+            hash_heredado = hashlib.sha256(contrasena.encode("utf-8")).hexdigest()
+            if not hmac.compare_digest(hash_guardado, hash_heredado):
+                return False
+            usuario.contrasena = UsuarioServicio._hash_contrasena(contrasena)
+            UsuarioRepositorio.guardar(usuario)
+            return True
+
+        return check_password_hash(hash_guardado, contrasena)
 
     @staticmethod
     def registrar(datos):
@@ -72,16 +97,17 @@ class UsuarioServicio:
             correo=datos["correo"],
             contrasena=UsuarioServicio._hash_contrasena(datos["contrasena"]),
             rol=datos["rol"],
+            perfil=PerfilUsuario(
+                nombre=datos.get("nombre"),
+                apellido=datos.get("apellido"),
+            ),
         )
 
-        UsuarioRepositorio.guardar(usuario)
-
-        perfil = PerfilUsuario(
-            usuario_id=usuario.id,
-            nombre=datos.get("nombre"),
-            apellido=datos.get("apellido"),
-        )
-        PerfilRepositorio.guardar(perfil)
+        try:
+            UsuarioRepositorio.guardar(usuario)
+        except SQLAlchemyError:
+            db.session.rollback()
+            raise
 
         return usuario
 
@@ -103,8 +129,7 @@ class UsuarioServicio:
         if not usuario:
             raise CredencialesInvalidasError("Correo o contraseña incorrectos.")
 
-        hash_ingresado = UsuarioServicio._hash_contrasena(datos["contrasena"])
-        if usuario.contrasena != hash_ingresado:
+        if not UsuarioServicio._verificar_contrasena(usuario, datos["contrasena"]):
             raise CredencialesInvalidasError("Correo o contraseña incorrectos.")
 
         exp_minutos = current_app.config.get("JWT_EXP_MINUTES", 15)
@@ -179,13 +204,14 @@ class UsuarioServicio:
         return UsuarioRepositorio.obtener_todos()
 
     @staticmethod
-    def cambiar_rol(usuario_id, nuevo_rol):
+    def cambiar_rol(usuario_id, nuevo_rol, actor_id):
         """
         Cambia el rol de un usuario (operación administrativa).
 
         Args:
             usuario_id: ID del usuario a modificar.
             nuevo_rol: Nuevo rol a asignar.
+            actor_id: ID del administrador autenticado que solicita el cambio.
 
         Returns:
             Usuario: El usuario con el rol actualizado.
@@ -196,6 +222,15 @@ class UsuarioServicio:
         usuario = UsuarioRepositorio.obtener_por_id(usuario_id)
         if not usuario:
             raise UsuarioNoEncontradoError(f"Usuario con id {usuario_id} no encontrado.")
+
+        if (
+            usuario_id == actor_id
+            or usuario.rol == "admin"
+            or nuevo_rol not in {"arrendatario", "propietario"}
+        ):
+            raise CambioRolNoPermitidoError(
+                "Los cambios de rol de administradores requieren el procedimiento controlado."
+            )
 
         usuario.rol = nuevo_rol
         UsuarioRepositorio.guardar(usuario)

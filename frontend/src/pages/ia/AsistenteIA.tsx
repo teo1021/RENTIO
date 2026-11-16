@@ -12,7 +12,7 @@ import {
 
 import './AsistenteIA.css';
 import { getApiError } from '../../api/client';
-import { catalogsApi, marketingApi, propertiesApi } from '../../api/services';
+import { catalogsApi, marketingApi } from '../../api/services';
 import { dateLabel, money } from '../../lib/format';
 import type {
   Barrio,
@@ -237,10 +237,7 @@ export default function AsistenteIA() {
       setSuccess(`“${created.titulo}” quedó registrada con éxito con ${created.imagenes.length} fotografía(s).`);
       setSelectedImages([]);
       setConversation(await marketingApi.conversation(conversation.id));
-      const [props, chats] = await Promise.all([
-        propertiesApi.mine(),
-        marketingApi.conversations(),
-      ]);
+      const chats = await marketingApi.conversations();
       setConversations(chats);
     } catch (err) {
       setError(getApiError(err, 'No fue posible confirmar el registro. No se guardó la propiedad.'));

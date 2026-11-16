@@ -6,6 +6,7 @@ from fastapi.testclient import TestClient
 
 from app.config import settings
 from app.extractor import ExtractorInmueble
+from app.generador_descripcion import GeneradorDescripcion
 from app.main import app
 from app.recomendador import RecomendadorPrecio
 
@@ -41,6 +42,32 @@ def test_seguridad_llave_interna():
         json={"mensaje_usuario": "Hola"},
     )
     assert res_llave_mala.status_code == 403
+
+
+def test_fallback_descripcion_no_inventa_caracteristicas(monkeypatch):
+    monkeypatch.setattr(GeneradorDescripcion, "_invocar_llm", lambda *_: None)
+
+    resultado = GeneradorDescripcion.generar(
+        {
+            "barrio": "Laureles",
+            "tipo": "apartamento",
+            "habitaciones": 2,
+            "banos": 1,
+        }
+    )
+
+    descripcion = resultado["descripcion"].lower()
+    for afirmacion_no_confirmada in (
+        "iluminación natural",
+        "ventilación",
+        "transporte público",
+        "zonas comerciales",
+        "parques",
+        "servicios esenciales",
+    ):
+        assert afirmacion_no_confirmada not in descripcion
+    assert "laureles" in descripcion
+    assert "2" in descripcion
 
 
 def test_extractor_atributos():

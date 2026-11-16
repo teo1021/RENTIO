@@ -19,6 +19,7 @@ import {
 } from 'lucide-react';
 
 import {
+  adminApi,
   catalogsApi,
   propertiesApi,
   rentalsApi,
@@ -132,7 +133,11 @@ export default function PropiedadesList() {
 
     try {
       const [properties, neighborhoods, amenities] = await Promise.all([
-        isOwner ? propertiesApi.mine() : propertiesApi.listPublic({}),
+        isOwner
+          ? propertiesApi.mine()
+          : isAdmin
+            ? adminApi.properties()
+            : propertiesApi.listPublic({}),
         catalogsApi.neighborhoods(),
         catalogsApi.features(),
       ]);

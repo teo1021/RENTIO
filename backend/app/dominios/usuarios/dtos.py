@@ -57,12 +57,12 @@ class ActualizarPerfilDTO(Schema):
 
 
 class CambiarRolDTO(Schema):
-    """Validación de datos para que un admin cambie el rol de un usuario."""
+    """Valida cambios de rol ordinarios; la promoción a admin es solo por CLI controlado."""
 
     rol = fields.String(
         required=True,
         validate=validate.OneOf(
-            ["arrendatario", "propietario", "admin"],
+            ["arrendatario", "propietario"],
             error="Rol inválido.",
         ),
         error_messages={"required": "El rol es obligatorio."},

@@ -77,7 +77,9 @@ export const catalogsApi = {
 
 export const adminApi = {
   users: () => data<Usuario[]>(api.get('/admin/usuarios')),
-  changeRole: (id: number, rol: Usuario['rol']) => data<Usuario>(api.patch(`/admin/usuarios/${id}/rol`, { rol })),
+  properties: () => data<Propiedad[]>(api.get('/propiedades/administracion')),
+  changeRole: (id: number, rol: 'arrendatario' | 'propietario') =>
+    data<Usuario>(api.patch(`/admin/usuarios/${id}/rol`, { rol })),
 };
 
 export const marketingApi = {

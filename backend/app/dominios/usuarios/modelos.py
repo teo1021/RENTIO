@@ -58,6 +58,23 @@ class Usuario(db.Model):
             resultado["perfil"] = self.perfil.to_dict()
         return resultado
 
+    def to_admin_dict(self):
+        """Serializa el usuario para administración sin exponer datos de contacto o identidad."""
+        return {
+            "id": self.id,
+            "correo": self.correo,
+            "rol": self.rol,
+            "fecha_creacion": self.fecha_creacion.isoformat() if self.fecha_creacion else None,
+            "perfil": (
+                {
+                    "nombre": self.perfil.nombre,
+                    "apellido": self.perfil.apellido,
+                }
+                if self.perfil
+                else None
+            ),
+        }
+
     def __repr__(self):
         return f"<Usuario {self.correo}>"
 

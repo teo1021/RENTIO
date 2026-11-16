@@ -7,6 +7,9 @@ Lógica de negocio para el flujo completo:
 
 from datetime import date, timedelta
 
+from sqlalchemy.exc import SQLAlchemyError
+
+from app import db
 from app.dominios.arriendos.modelos import ContratoArriendo, SolicitudArriendo
 from app.dominios.arriendos.repositorios import ContratoRepositorio, SolicitudRepositorio
 from app.dominios.propiedades.repositorios import PropiedadRepositorio
@@ -221,12 +224,16 @@ class ArriendoServicio:
             fiador_telefono=datos.get("fiador_telefono"),
             clausulas_adicionales=datos.get("clausulas_adicionales"),
         )
-        ContratoRepositorio.guardar(contrato)
-
         solicitud.estado = "contrato_generado"
         solicitud.propiedad.estado = "arrendada"
-        PropiedadRepositorio.guardar(solicitud.propiedad)
-        SolicitudRepositorio.guardar(solicitud)
+        try:
+            ContratoRepositorio.guardar(contrato, commit=False)
+            PropiedadRepositorio.guardar(solicitud.propiedad, commit=False)
+            SolicitudRepositorio.guardar(solicitud, commit=False)
+            db.session.commit()
+        except SQLAlchemyError:
+            db.session.rollback()
+            raise
 
         return solicitud
 
@@ -273,15 +280,19 @@ class ArriendoServicio:
                 precio_acordado=precio_acordado,
                 estado="activo",
             )
-            ContratoRepositorio.guardar(contrato)
-
             solicitud.estado = "contrato_generado"
             solicitud.propiedad.estado = "arrendada"
-            PropiedadRepositorio.guardar(solicitud.propiedad)
+            try:
+                ContratoRepositorio.guardar(contrato, commit=False)
+                PropiedadRepositorio.guardar(solicitud.propiedad, commit=False)
+                SolicitudRepositorio.guardar(solicitud, commit=False)
+                db.session.commit()
+            except SQLAlchemyError:
+                db.session.rollback()
+                raise
         else:
             solicitud.estado = "rechazada"
-
-        SolicitudRepositorio.guardar(solicitud)
+            SolicitudRepositorio.guardar(solicitud)
         return solicitud
 
     @staticmethod

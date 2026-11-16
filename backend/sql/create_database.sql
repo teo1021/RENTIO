@@ -7,7 +7,10 @@ CREATE TYPE tipo_propiedad AS ENUM (
     'local_comercial', 'oficina', 'bodega', 'finca'
 );
 CREATE TYPE estado_propiedad AS ENUM ('disponible', 'arrendada', 'inactiva');
-CREATE TYPE estado_solicitud AS ENUM ('pendiente', 'aceptada', 'rechazada');
+CREATE TYPE estado_solicitud AS ENUM (
+    'pendiente', 'pendiente_visita', 'visita_programada',
+    'contrato_generado', 'aceptada', 'rechazada'
+);
 CREATE TYPE estado_contrato AS ENUM ('activo', 'finalizado', 'cancelado');
 
 CREATE TABLE usuarios (
@@ -72,6 +75,10 @@ CREATE TABLE solicitudes_arriendo (
     propiedad_id INTEGER NOT NULL REFERENCES propiedades(id) ON DELETE CASCADE,
     arrendatario_id INTEGER NOT NULL REFERENCES usuarios(id) ON DELETE CASCADE,
     mensaje TEXT,
+    cedula_arrendatario VARCHAR(20),
+    telefono_arrendatario VARCHAR(20),
+    fecha_visita_propuesta DATE,
+    fecha_visita_confirmada DATE,
     arrendatario_nombre VARCHAR(100),
     arrendatario_apellido VARCHAR(100),
     arrendatario_cedula VARCHAR(20),
@@ -81,13 +88,22 @@ CREATE TABLE solicitudes_arriendo (
 );
 CREATE TABLE contratos_arriendo (
     id SERIAL PRIMARY KEY,
+    numero_contrato VARCHAR(20) UNIQUE,
     solicitud_id INTEGER NOT NULL UNIQUE REFERENCES solicitudes_arriendo(id) ON DELETE CASCADE,
     fecha_inicio DATE NOT NULL,
     fecha_fin DATE NOT NULL,
     precio_acordado NUMERIC(10,2) NOT NULL,
     contenido TEXT,
     estado estado_contrato NOT NULL DEFAULT 'activo',
-    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
+    fecha_creacion TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP,
+    trabaja BOOLEAN,
+    empresa VARCHAR(200),
+    cargo VARCHAR(200),
+    ingreso_mensual NUMERIC(12,2),
+    fiador_nombre VARCHAR(200),
+    fiador_cedula VARCHAR(20),
+    fiador_telefono VARCHAR(20),
+    clausulas_adicionales TEXT
 );
 
 CREATE SCHEMA ia_marketing;

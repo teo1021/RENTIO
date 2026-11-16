@@ -127,10 +127,8 @@ class GeneradorDescripcion:
 
             texto_ia = (
                 f"¡Excelente oportunidad de arriendo en {barrio}! "
-                f"Espectacular {tipo}{estrato_frase}, diseñado para brindarte el máximo confort y bienestar.\n\n"
-                f"La propiedad destaca por su iluminación natural, ventilación y distribución inteligente. "
-                f"Cuenta con {hab_texto} y {bano_texto}{area_frase}, creando un ambiente acogedor ideal para vivir con tranquilidad.{amenidades_bloque}\n\n"
-                f"📍 Ubicación privilegiada en {barrio}, con fácil acceso al transporte público, zonas comerciales, parques y servicios esenciales.\n\n"
+                f"Disponible {tipo}{estrato_frase}, con {hab_texto} y {bano_texto}{area_frase}.{amenidades_bloque}\n\n"
+                f"Ubicada en {barrio}. Consulta los detalles del inmueble y agenda una visita para conocerlo.\n\n"
                 f"¡No dejes pasar esta oportunidad! Agenda tu visita hoy mismo y enamórate de tu nuevo hogar."
             )
 
