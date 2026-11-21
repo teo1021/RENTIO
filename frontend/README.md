@@ -1,63 +1,47 @@
 # RENTIO Frontend
 
-Frontend independiente de RENTIO construido con React, TypeScript y Vite. Se conecta exclusivamente a la API principal Flask del proyecto; el microservicio FastAPI de IA se consume desde el backend y no se expone directamente al navegador.
+SPA construida con HTML, CSS, JavaScript nativo, Bootstrap 5 y Vite. La navegación usa History API y el navegador se comunica exclusivamente con la API Flask.
 
 ## Requisitos
 
 - Node.js 18 o superior (20+ recomendado).
 - npm.
-- Backend RENTIO ejecutándose y accesible desde el navegador.
+- API Flask accesible desde el navegador.
 
-## Configuración
+## Desarrollo
 
-1. Descomprime este proyecto.
-2. Abre una terminal en la carpeta del frontend.
-3. Instala dependencias:
+```bash
+cd frontend
+npm install
+npm run dev
+```
 
-   ```bash
-   npm install
-   ```
+La URL predeterminada es `http://localhost:3000`. Para cambiar la API, copia `.env.example` a `.env` y ajusta `VITE_API_URL`; por defecto es `http://localhost:5000/api/v1`.
 
-4. Copia `.env.example` a `.env` si necesitas configurar otra dirección de backend.
-5. Verifica que `VITE_API_URL` apunte a la API Flask. Por defecto:
-
-   ```text
-   http://localhost:5000/api/v1
-   ```
-
-6. Inicia el servidor de desarrollo:
-
-   ```bash
-   npm run dev
-   ```
-
-7. Abre la URL que indique Vite (por defecto `http://localhost:3000`).
-
-## Compilar para producción
+## Producción
 
 ```bash
 npm run build
 npm run preview
 ```
 
-Consulta `INTEGRACION_API.md` para ver el mapa detallado de rutas, autenticación, permisos y límites de integración.
+El servidor que publique `dist/` debe devolver `index.html` para las rutas de la SPA (`/dashboard`, `/propiedades/:id`, etc.). No debe reescribir las llamadas a `/api/v1`.
 
-## Funcionalidades conectadas
+## Organización
 
-- Registro e inicio de sesión con JWT (`/usuarios/registro`, `/usuarios/login`).
-- Consulta y actualización del perfil (`/usuarios/perfil`).
-- Propiedades: listado público, mis propiedades, creación, edición, eliminación y actualización de características.
-- Solicitudes de arriendo y contratos: solicitudes enviadas/recibidas, responder solicitudes y consultar contratos.
-- Administración: listado de usuarios y cambio de rol.
-- Catálogos: consulta pública y creación administrativa de barrios y características.
-- IA Marketing: conversaciones, mensajes, aplicación de resultados y herramientas de descripción, canon, análisis de mercado y títulos.
+- `src/router.js`: rutas, guards de rol e historial del navegador.
+- `src/api/`: cliente Fetch y servicios REST existentes.
+- `src/store/auth.js`: estado de sesión; el token JWT se conserva en `localStorage`.
+- `src/pages/`: pantallas independientes en JavaScript.
+- `src/styles.css`: estilos propios sobre Bootstrap.
 
-## Consideraciones
+El borrador de registro con IA se guarda en PostgreSQL mediante Flask. Las fotografías elegidas para una propiedad permanecen en memoria del navegador hasta que el propietario confirma la publicación, porque la API existente solo las recibe al crear la propiedad.
 
-- El frontend no modifica el backend ni la base de datos.
-- Los permisos se presentan de acuerdo con los roles reales del backend: `arrendatario`, `propietario` y `admin`.
-- La API principal tiene que permitir el origen del frontend mediante CORS. El backend del ZIP original habilita CORS para `/api/*`; revisa `CORS_ALLOWED_ORIGINS` si despliegas en otro dominio.
-- Algunas operaciones requieren que existan barrios y características en sus catálogos.
-- El registro público permite crear cuentas de tipo `arrendatario` o `propietario`; la cuenta `admin` debe asignarse por el mecanismo administrativo del backend.
-- No existe endpoint de carga de imágenes en el backend original, por lo que esta versión no inventa una carga de archivos. Las tarjetas muestran un tratamiento visual genérico hasta que exista un endpoint de imágenes.
-- Las respuestas de IA y los análisis de mercado dependen de la configuración y disponibilidad del microservicio interno.
+## Pruebas
+
+```bash
+npm test
+npm run build
+```
+
+El PDF de contrato se genera en el navegador con los datos del contrato y de su solicitud. Si faltan identificaciones, fechas, canon o inmueble, la descarga queda bloqueada. Para el rol arrendatario la API actual no entrega la identidad del propietario, por lo que no se genera un documento incompleto.

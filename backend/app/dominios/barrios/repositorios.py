@@ -26,7 +26,7 @@ class BarrioRepositorio:
         return db.session.get(Barrio, barrio_id)
 
     @staticmethod
-    def obtener_por_nombre_y_comuna(nombre, comuna):
+    def obtener_por_nombre_y_comuna(nombre, comuna, excluir_id=None):
         """Obtiene un barrio por nombre y comuna, ignorando tildes y mayúsculas."""
         nombre_normalizado = unicodedata.normalize("NFKD", nombre.strip().lower()).encode("ASCII", "ignore").decode()
         comuna_normalizada = unicodedata.normalize("NFKD", comuna.strip().lower()).encode("ASCII", "ignore").decode()
@@ -34,6 +34,7 @@ class BarrioRepositorio:
             (
                 barrio
                 for barrio in Barrio.query.all()
+                if barrio.id != excluir_id
                 if unicodedata.normalize("NFKD", barrio.nombre.strip().lower()).encode("ASCII", "ignore").decode() == nombre_normalizado
                 and unicodedata.normalize("NFKD", barrio.comuna.strip().lower()).encode("ASCII", "ignore").decode() == comuna_normalizada
             ),

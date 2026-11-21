@@ -83,6 +83,16 @@ class MejorarTituloDTO(Schema):
     solicitud = fields.String(load_default=None, allow_none=True)
 
 
+class ActualizarBorradorMarketingDTO(Schema):
+    """Valida la actualización parcial de un borrador de conversación."""
+
+    datos_recopilados = fields.Dict(
+        keys=fields.String(),
+        values=fields.Raw(),
+        required=True,
+    )
+
+
 class ExtraerDatosPropiedadDTO(Schema):
     """Validación de datos para extraer información de propiedad desde un texto libre."""
 

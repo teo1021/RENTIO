@@ -7,6 +7,7 @@ Define el blueprint `ia_bp` con endpoints especializados para propietarios.
 import unicodedata
 import os
 import re
+import math
 
 from flask import Blueprint, current_app, jsonify, request
 from marshmallow import ValidationError
@@ -26,6 +27,7 @@ from app.dominios.ia_marketing.cliente import (
     solicitar as solicitar_a_ia,
 )
 from app.dominios.ia_marketing.dtos import (
+    ActualizarBorradorMarketingDTO,
     AnalisisMercadoDTO,
     GenerarDescripcionDTO,
     MejorarTituloDTO,
@@ -334,6 +336,126 @@ def obtener_conversacion(conversacion_id, usuario_id=None):
     if conversacion is None:
         return jsonify({"success": False, "error": {"message": "ConversaciÃ³n no encontrada."}}), 404
     return jsonify({"success": True, "data": _conversacion_dict(conversacion)}), 200
+
+
+@ia_bp.route("/conversaciones/<int:conversacion_id>", methods=["PATCH"])
+@requiere_propietario
+def actualizar_borrador(conversacion_id, usuario_id=None):
+    """Guarda cambios explícitos del borrador sin crear mensajes ni duplicar registros."""
+    try:
+        entrada = ActualizarBorradorMarketingDTO().load(request.get_json() or {})
+    except ValidationError as err:
+        return jsonify({
+            "success": False,
+            "error": {"message": "Datos de entrada inválidos.", "details": err.messages},
+        }), 400
+
+    conversacion = ConversacionMarketing.query.filter_by(
+        id=conversacion_id,
+        propietario_id=usuario_id,
+    ).first()
+    if conversacion is None:
+        return jsonify({
+            "success": False,
+            "error": {"message": "Conversación de marketing no encontrada."},
+        }), 404
+    if conversacion.propiedad_id or conversacion.estado in {"generada", "cerrada"}:
+        return jsonify({
+            "success": False,
+            "error": {"message": "Esta conversación ya no admite cambios de borrador."},
+        }), 409
+
+    cambios = entrada["datos_recopilados"]
+    permitidos = {
+        "barrio", "barrio_comuna", "tipo", "habitaciones", "banos",
+        "direccion", "estrato", "area_m2", "precio_mensual",
+        "parqueadero", "caracteristicas", "canon_confirmado",
+        "titulo", "descripcion", "mensaje_borrador",
+    }
+    desconocidos = set(cambios) - permitidos
+    if desconocidos:
+        return jsonify({
+            "success": False,
+            "error": {
+                "message": "El borrador contiene campos no editables.",
+                "details": {"campos": sorted(desconocidos)},
+            },
+        }), 400
+
+    datos = dict(conversacion.datos_recopilados or {})
+    datos.update(cambios)
+    errores = {}
+    texto = ("barrio", "barrio_comuna", "direccion", "titulo", "descripcion", "mensaje_borrador")
+    for campo in texto:
+        valor = cambios.get(campo)
+        if valor is not None and not isinstance(valor, str):
+            errores[campo] = ["Debe ser texto."]
+        elif isinstance(valor, str) and len(valor) > (
+            5000 if campo == "descripcion" else 4000 if campo == "mensaje_borrador" else 500 if campo == "direccion" else 255 if campo == "titulo" else 100
+        ):
+            errores[campo] = ["Supera la longitud máxima permitida."]
+
+    if "tipo" in cambios and cambios["tipo"] is not None and cambios["tipo"] not in {
+        "casa", "apartamento", "habitacion", "apartaestudio",
+        "local_comercial", "oficina", "bodega", "finca",
+    }:
+        errores["tipo"] = ["Tipo de inmueble inválido."]
+    for campo in ("habitaciones", "banos"):
+        valor = cambios.get(campo)
+        if campo in cambios and valor is not None and (
+            isinstance(valor, bool) or not isinstance(valor, int) or not 0 <= valor <= 50
+        ):
+            errores[campo] = ["Debe ser un número entero entre 0 y 50."]
+    if "estrato" in cambios:
+        valor = cambios["estrato"]
+        if valor is not None and (isinstance(valor, bool) or not isinstance(valor, int) or not 1 <= valor <= 6):
+            errores["estrato"] = ["Debe ser un número entero entre 1 y 6."]
+    for campo, minimo in (("area_m2", 1), ("precio_mensual", 1)):
+        valor = cambios.get(campo)
+        if campo in cambios and valor is not None:
+            if isinstance(valor, bool) or not isinstance(valor, (int, float)) or not math.isfinite(valor) or valor < minimo:
+                errores[campo] = [f"Debe ser un número mayor o igual a {minimo}."]
+    if "parqueadero" in cambios and cambios["parqueadero"] is not None and not isinstance(cambios["parqueadero"], bool):
+        errores["parqueadero"] = ["Debe ser verdadero o falso."]
+    if "canon_confirmado" in cambios and cambios["canon_confirmado"] is not None and not isinstance(cambios["canon_confirmado"], bool):
+        errores["canon_confirmado"] = ["Debe ser verdadero o falso."]
+    if "caracteristicas" in cambios and cambios["caracteristicas"] is not None and (
+        not isinstance(cambios["caracteristicas"], list)
+        or any(not isinstance(item, str) or len(item) > 100 for item in cambios["caracteristicas"])
+    ):
+        errores["caracteristicas"] = ["Debe ser una lista de textos de hasta 100 caracteres."]
+
+    if errores:
+        return jsonify({
+            "success": False,
+            "error": {"message": "Los datos del borrador no son válidos.", "details": errores},
+        }), 400
+
+    if cambios.get("canon_confirmado") is True and float(datos.get("precio_mensual") or 0) <= 0:
+        return jsonify({
+            "success": False,
+            "error": {"message": "Confirma un canon mayor que cero antes de continuar."},
+        }), 400
+    if "precio_mensual" in cambios and "canon_confirmado" not in cambios:
+        datos["canon_confirmado"] = False
+
+    campos_requeridos = (
+        "barrio", "tipo", "habitaciones", "banos", "direccion", "estrato", "precio_mensual",
+    )
+    completo = all(datos.get(campo) not in (None, "") for campo in campos_requeridos)
+    completo = completo and float(datos.get("precio_mensual") or 0) > 0
+    conversacion.estado = (
+        "lista"
+        if completo and datos.get("canon_confirmado") is True
+        else "recopilando"
+    )
+    conversacion.datos_recopilados = datos
+    db.session.commit()
+    return jsonify({
+        "success": True,
+        "message": "Borrador guardado con éxito.",
+        "data": _conversacion_dict(conversacion),
+    }), 200
 
 
 @ia_bp.route("/conversaciones/<int:conversacion_id>/mensajes", methods=["POST"])

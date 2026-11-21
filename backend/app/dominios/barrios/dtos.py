@@ -29,3 +29,7 @@ class CrearBarrioDTO(Schema):
         load_default="barrio",
         validate=validate.OneOf(["barrio", "vereda", "sector", "comuna"]),
     )
+
+
+class ActualizarBarrioDTO(CrearBarrioDTO):
+    """Validación completa para corregir un barrio existente."""
