@@ -88,7 +88,9 @@ class ActualizarBorradorMarketingDTO(Schema):
 
     datos_recopilados = fields.Dict(
         keys=fields.String(),
-        values=fields.Raw(),
+        # Los datos del borrador pueden estar incompletos mientras la IA
+        # recopila la información conversacional.
+        values=fields.Raw(allow_none=True),
         required=True,
     )
 

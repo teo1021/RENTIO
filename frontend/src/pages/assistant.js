@@ -344,10 +344,15 @@ export function mount(root) {
     try {
       const response = await marketingApi.sendMessage(conversation.id, message);
       conversation = await marketingApi.conversation(conversation.id);
-      const snapshot = { ...formDraftSnapshot(root), mensaje_borrador: null };
-      conversation = await marketingApi.updateDraft(conversation.id, snapshot);
-      savedSnapshot = JSON.stringify(snapshot);
       await refreshAssistant(root, conversation);
+      const chatDraft = root.querySelector('textarea[name="mensaje_borrador"]');
+      if (chatDraft) chatDraft.value = '';
+      const snapshot = formDraftSnapshot(root);
+      savedSnapshot = JSON.stringify(snapshot);
+      if (conversation.datos_recopilados?.mensaje_borrador) {
+        conversation = await marketingApi.updateDraft(conversation.id, { mensaje_borrador: null });
+        savedSnapshot = JSON.stringify(formDraftSnapshot(root));
+      }
       root.querySelector('[data-save-state]').className = 'save-state saved';
       root.querySelector('[data-save-state]').textContent = 'Guardado';
       if (response.resultado_generado?.descripcion) {
