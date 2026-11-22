@@ -176,3 +176,92 @@ def test_herramienta_usa_propiedad_del_propietario_y_persiste_resultado(
     assert resultado.propiedad_id == propiedad.id
     assert resultado.descripcion == "Texto real generado"
     assert resultado.datos_usados["barrio"] == "Laureles"
+
+
+def test_actualizar_borrador_guarda_datos_sin_crear_mensajes(
+    client, db, propietario_auth, arrendatario_auth
+):
+    from app.dominios.ia_marketing.modelos import ConversacionMarketing, MensajeMarketing
+
+    conversacion = client.post(
+        "/api/v1/ia/conversaciones",
+        headers=propietario_auth["headers"],
+        json={},
+    ).get_json()["data"]
+    payload = {
+        "datos_recopilados": {
+            "barrio": "Laureles",
+            "tipo": "apartamento",
+            "habitaciones": 2,
+            "banos": 1,
+            "direccion": "Calle 45 # 70-20",
+            "estrato": 4,
+            "precio_mensual": 2_500_000,
+            "canon_confirmado": True,
+            "titulo": "Apartamento en Laureles",
+            "descripcion": "Apartamento amplio y luminoso.",
+        }
+    }
+
+    response = client.patch(
+        f"/api/v1/ia/conversaciones/{conversacion['id']}",
+        headers=propietario_auth["headers"],
+        json=payload,
+    )
+    assert response.status_code == 200
+    assert response.get_json()["data"]["estado"] == "lista"
+    guardada = db.session.get(ConversacionMarketing, conversacion["id"])
+    assert guardada.datos_recopilados["descripcion"] == "Apartamento amplio y luminoso."
+    assert MensajeMarketing.query.filter_by(conversacion_id=conversacion["id"]).count() == 0
+
+    incompleto = client.post(
+        "/api/v1/ia/conversaciones",
+        headers=propietario_auth["headers"],
+        json={},
+    ).get_json()["data"]
+    datos_parciales = {
+        "mensaje_borrador": "apartamento en laureles",
+        "tipo": None,
+        "barrio": None,
+        "habitaciones": None,
+        "banos": None,
+        "direccion": None,
+    }
+    parcial_response = client.patch(
+        f"/api/v1/ia/conversaciones/{incompleto['id']}",
+        headers=propietario_auth["headers"],
+        json={"datos_recopilados": datos_parciales},
+    )
+    assert parcial_response.status_code == 200
+    assert parcial_response.get_json()["data"]["estado"] == "recopilando"
+    assert parcial_response.get_json()["data"]["datos_recopilados"] == datos_parciales
+
+    crear_incompleta = client.post(
+        f"/api/v1/ia/conversaciones/{incompleto['id']}/crear-propiedad",
+        headers=propietario_auth["headers"],
+        json={},
+    )
+    assert crear_incompleta.status_code == 400
+
+    tipo_invalido = client.patch(
+        f"/api/v1/ia/conversaciones/{incompleto['id']}",
+        headers=propietario_auth["headers"],
+        json={"datos_recopilados": {"habitaciones": "dos"}},
+    )
+    assert tipo_invalido.status_code == 400
+    assert "habitaciones" in tipo_invalido.get_json()["error"]["details"]
+
+    mensaje_largo = client.patch(
+        f"/api/v1/ia/conversaciones/{conversacion['id']}",
+        headers=propietario_auth["headers"],
+        json={"datos_recopilados": {"mensaje_borrador": "x" * 4001}},
+    )
+    assert mensaje_largo.status_code == 400
+    assert "mensaje_borrador" in mensaje_largo.get_json()["error"]["details"]
+
+    sin_permiso = client.patch(
+        f"/api/v1/ia/conversaciones/{conversacion['id']}",
+        headers=arrendatario_auth["headers"],
+        json=payload,
+    )
+    assert sin_permiso.status_code == 403

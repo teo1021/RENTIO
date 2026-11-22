@@ -7,7 +7,8 @@ Define el blueprint `barrios_bp` para consultar barrios y sus propiedades.
 from flask import Blueprint, jsonify, request
 from marshmallow import ValidationError
 
-from app.dominios.barrios.dtos import CrearBarrioDTO
+from app.dominios.barrios.dtos import ActualizarBarrioDTO, CrearBarrioDTO
+from app.dominios.barrios.servicios import BarrioDuplicadoError, BarrioNoEncontradoError
 from app.seguridad import requiere_admin
 
 # ── Servicio inyectado por el factory ──────────────────────────────────
@@ -69,7 +70,10 @@ def crear(usuario_id=None):
             400,
         )
 
-    barrio = servicio.crear(datos)
+    try:
+        barrio = servicio.crear(datos)
+    except BarrioDuplicadoError as err:
+        return jsonify({"success": False, "error": {"message": str(err)}}), 409
     return (
         jsonify(
             {
@@ -79,4 +83,42 @@ def crear(usuario_id=None):
             }
         ),
         201,
+    )
+
+
+@barrios_bp.route("/<int:id>", methods=["PATCH"])
+@requiere_admin
+def actualizar(id, usuario_id=None):
+    """Corrige los datos de un barrio sin cambiar sus relaciones con propiedades."""
+    try:
+        datos = ActualizarBarrioDTO().load(request.get_json() or {})
+    except ValidationError as err:
+        return (
+            jsonify(
+                {
+                    "success": False,
+                    "error": {
+                        "message": "Datos de entrada inválidos.",
+                        "details": err.messages,
+                    },
+                }
+            ),
+            400,
+        )
+
+    try:
+        barrio = servicio.actualizar(id, datos)
+    except BarrioNoEncontradoError as err:
+        return jsonify({"success": False, "error": {"message": str(err)}}), 404
+    except BarrioDuplicadoError as err:
+        return jsonify({"success": False, "error": {"message": str(err)}}), 409
+    return (
+        jsonify(
+            {
+                "success": True,
+                "message": "Barrio actualizado con éxito.",
+                "data": barrio.to_dict(),
+            }
+        ),
+        200,
     )

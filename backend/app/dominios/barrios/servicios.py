@@ -62,6 +62,26 @@ class BarrioServicio:
         return BarrioRepositorio.guardar(barrio)
 
     @staticmethod
+    def actualizar(barrio_id, datos):
+        """Actualiza los datos de un barrio conservando su identidad y relaciones."""
+        barrio = BarrioServicio.obtener_por_id(barrio_id)
+        existente = BarrioRepositorio.obtener_por_nombre_y_comuna(
+            datos["nombre"],
+            datos["comuna"],
+            excluir_id=barrio_id,
+        )
+        if existente:
+            raise BarrioDuplicadoError(
+                f"El barrio '{datos['nombre']}' ya existe en la comuna '{datos['comuna']}'."
+            )
+
+        barrio.nombre = datos["nombre"]
+        barrio.comuna = datos["comuna"]
+        barrio.zona = datos["zona"]
+        barrio.tipo = datos.get("tipo", "barrio")
+        return BarrioRepositorio.guardar(barrio)
+
+    @staticmethod
     def obtener_por_id(barrio_id):
         """
         Obtiene un barrio por su ID.
